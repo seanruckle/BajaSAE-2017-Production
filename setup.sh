@@ -4,9 +4,10 @@ apt-get update
 apt-get purge scratch brasero libreoffice* sense-emu-tools shotwell thunderbird -y
 apt-get autoremove -y
 apt-get upgrade -y
-apt-get install -y mumble mumble-server git-all arduino arduino-core witty witty-examples nmap
-mkdir /home/pit/code
-git clone https://github.com/seanruckle/BajaSAE-2017-Production.git /home/pit/code
+apt-get install -y mumble mumble-server arduino arduino-core witty witty-examples nmap git-all
+mkdir /home/$1/code
+git clone https://github.com/seanruckle/BajaSAE-2017-Production.git /home/$1/code
+chown -R $1 /home/$1/code
 
 ifdown wlan0
 
@@ -47,4 +48,4 @@ desktop-file-install /usr/local/share/applications/processing.desktop >/dev/null
 echo "Done! You can start Processing by running \"processing\" in the terminal, or through the applications menu (might require a restart).\n"
 else echo -e "\nProcessing already installed\n"
 fi
-
+rm -f /home/$1/setup.sh

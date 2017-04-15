@@ -1,7 +1,7 @@
 #!/bin/bash
 
 mkdir /home/$1/code
-git clone https://github.com/seanruckle/BajaSAE-2017-Production.git /home/$1/code
-chmod a+rwx /home/$1/code/setup.sh
-/home/$1/code/setup.sh
-chown -R $1 /home/$1/code
+curl -o /home/$1/setup.sh https://gitub.com/seanruckle/BajaSae-2017-Production/raw/master/setup.sh
+chmod a+rwx /home/$1/setup.sh
+/home/$1/setup.sh $1
+
