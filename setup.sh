@@ -1,11 +1,11 @@
 #!/bin/bash
 
+apt-get update
 apt-get purge scratch brasero libreoffice* sense-emu-tools shotwell thunderbird -y
 apt-get autoremove -y
-apt-get update
 apt-get upgrade -y
 apt-get install -y mumble mumble-server git-all arduino arduino-core witty witty-examples nmap
- mkdir /home/pit/code
+mkdir /home/pit/code
 git clone https://github.com/seanruckle/BajaSAE-2017-Production.git /home/pit/code
 
 ifdown wlan0
