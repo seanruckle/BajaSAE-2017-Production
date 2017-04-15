@@ -45,6 +45,6 @@ sed -i 's|/opt/processing|/usr/local/lib/processing|' /usr/local/share/applicati
 desktop-file-install /usr/local/share/applications/processing.desktop >/dev/null 2>&1
 
 echo "Done! You can start Processing by running \"processing\" in the terminal, or through the applications menu (might require a restart).\n"
-else echo "\nProcessing already installed\n"
+else echo -e "\nProcessing already installed\n"
 fi
 
