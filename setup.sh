@@ -10,8 +10,7 @@ git clone https://github.com/seanruckle/BajaSAE-2017-Production.git /home/pit/co
 
 ifdown wlan0
 
-if[! -e /usr/local/lib/processing] 
-then
+if[! -d "/usr/local/lib/processing"]; then
 # This script installs the latest version of Processing for ARM into /usr/local/lib
 # Run it like this: "curl https://processing.org/download/install-arm.sh | sudo sh"
 
