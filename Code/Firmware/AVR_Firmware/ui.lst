@@ -1,0 +1,1099 @@
+   1               		.file	"ui.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	uiStateMachine
+  12               	uiStateMachine:
+  13               	.LFB1:
+  14               		.file 1 "ui.c"
+   1:ui.c          **** /***************************************************************************
+   2:ui.c          **** ui.c
+   3:ui.c          **** 
+   4:ui.c          **** Handles all the user interface parsing when data comes in over the serial
+   5:ui.c          ****  port.
+   6:ui.c          **** 
+   7:ui.c          **** 02 May 2013 - Mike Hord, SparkFun Electronics
+   8:ui.c          **** 
+   9:ui.c          **** This code is released under the Creative Commons Attribution Share-Alike 3.0
+  10:ui.c          ****  license. You are free to reuse, remix, or redistribute it as you see fit,
+  11:ui.c          ****  so long as you provide attribution to SparkFun Electronics.
+  12:ui.c          **** 
+  13:ui.c          **** ***************************************************************************/
+  14:ui.c          **** 
+  15:ui.c          **** #include "ui.h"
+  16:ui.c          **** #include "lcd.h"
+  17:ui.c          **** #include "serial.h"
+  18:ui.c          **** #include "glcdbp.h"
+  19:ui.c          **** #include "nvm.h"
+  20:ui.c          **** //	#include "demo.h"	// Not used in this application ~Kyle
+  21:ui.c          **** 
+  22:ui.c          **** // These variables are defined in glcdbp.c, and are used for the input buffer
+  23:ui.c          **** //   from the serial port. We need to be able to access them here because we'll
+  24:ui.c          **** //   be stuck here parsing input from the serial port once a command comes in.
+  25:ui.c          **** extern volatile uint8_t 	rxRingBuffer[BUF_DEPTH];
+  26:ui.c          **** extern volatile uint16_t 	rxRingHead;
+  27:ui.c          **** extern volatile uint16_t	rxRingTail;
+  28:ui.c          **** extern volatile uint8_t	  bufferSize;
+  29:ui.c          **** extern volatile uint8_t   reverse;
+  30:ui.c          **** 
+  31:ui.c          **** // These variables are defined in lcd.c, and form the backbone of the pseudo
+  32:ui.c          **** //  terminal text handling system.
+  33:ui.c          **** extern uint8_t  cursorPos[];
+  34:ui.c          **** extern uint8_t  textOrigin[];
+  35:ui.c          **** extern uint16_t textLength;
+  36:ui.c          **** extern uint8_t  yDim;
+  37:ui.c          **** extern uint8_t  xDim;
+  38:ui.c          **** 
+  39:ui.c          **** 
+  40:ui.c          **** // This is a state machine that acts based on the received command from the
+  41:ui.c          **** //  main program loop.
+  42:ui.c          **** void uiStateMachine(char command)
+  43:ui.c          **** {
+  15               		.loc 1 43 0
+  16               		.cfi_startproc
+  17               	.LVL0:
+  18 0000 0F93      		push r16
+  19               	.LCFI0:
+  20               		.cfi_def_cfa_offset 3
+  21               		.cfi_offset 16, -2
+  22 0002 1F93      		push r17
+  23               	.LCFI1:
+  24               		.cfi_def_cfa_offset 4
+  25               		.cfi_offset 17, -3
+  26 0004 CF93      		push r28
+  27               	.LCFI2:
+  28               		.cfi_def_cfa_offset 5
+  29               		.cfi_offset 28, -4
+  30 0006 DF93      		push r29
+  31               	.LCFI3:
+  32               		.cfi_def_cfa_offset 6
+  33               		.cfi_offset 29, -5
+  34 0008 00D0      		rcall .
+  35 000a 00D0      		rcall .
+  36 000c 1F92      		push __zero_reg__
+  37               	.LCFI4:
+  38               		.cfi_def_cfa_offset 11
+  39 000e CDB7      		in r28,__SP_L__
+  40 0010 DEB7      		in r29,__SP_H__
+  41               	.LCFI5:
+  42               		.cfi_def_cfa_register 28
+  43               	/* prologue: function */
+  44               	/* frame size = 5 */
+  45               	/* stack size = 9 */
+  46               	.L__stack_usage = 9
+  47               	.LVL1:
+  44:ui.c          ****   // Up to five characters may be needed to describe any single operation.
+  45:ui.c          ****   char cmdBuffer[5];
+  46:ui.c          ****   // We'll want to track how far we've moved through our buffered command
+  47:ui.c          ****   //  bytes once we've received them all.
+  48:ui.c          ****   uint8_t cmdBufferPtr = 0;
+  49:ui.c          ****   // We will *assume* a state of ON for pixel values; we can clear that later.
+  50:ui.c          ****   PIX_VAL pixel = ON;
+  51:ui.c          ****   // Now, let's figure out where to start, based on our command input. There's
+  52:ui.c          ****   //  a lot of good information about the switch constants in the header file.
+  53:ui.c          **** 
+  54:ui.c          ****   switch(command)
+  48               		.loc 1 54 0
+  49 0012 90E0      		ldi r25,0
+  50 0014 8A31      		cpi r24,26
+  51 0016 9105      		cpc r25,__zero_reg__
+  52 0018 00F0      		brlo .+2
+  53 001a 00C0      		rjmp .L1
+  54 001c FC01      		movw r30,r24
+  55 001e E050      		subi r30,lo8(-(gs(.L4)))
+  56 0020 F040      		sbci r31,hi8(-(gs(.L4)))
+  57 0022 0C94 0000 		jmp __tablejump2__
+  58               	.LVL2:
+  59               		.section	.progmem.gcc_sw_table,"a",@progbits
+  60               		.p2align	1
+  61               	.L4:
+  62 0000 0000      		.word gs(.L106)
+  63 0002 0000      		.word gs(.L1)
+  64 0004 0000      		.word gs(.L21)
+  65 0006 0000      		.word gs(.L6)
+  66 0008 0000      		.word gs(.L64)
+  67 000a 0000      		.word gs(.L8)
+  68 000c 0000      		.word gs(.L1)
+  69 000e 0000      		.word gs(.L30)
+  70 0010 0000      		.word gs(.L1)
+  71 0012 0000      		.word gs(.L1)
+  72 0014 0000      		.word gs(.L1)
+  73 0016 0000      		.word gs(.L10)
+  74 0018 0000      		.word gs(.L11)
+  75 001a 0000      		.word gs(.L1)
+  76 001c 0000      		.word gs(.L1)
+  77 001e 0000      		.word gs(.L12)
+  78 0020 0000      		.word gs(.L13)
+  79 0022 0000      		.word gs(.L1)
+  80 0024 0000      		.word gs(.L14)
+  81 0026 0000      		.word gs(.L15)
+  82 0028 0000      		.word gs(.L1)
+  83 002a 0000      		.word gs(.L1)
+  84 002c 0000      		.word gs(.L1)
+  85 002e 0000      		.word gs(.L1)
+  86 0030 0000      		.word gs(.L34)
+  87 0032 0000      		.word gs(.L37)
+  88               		.text
+  89               	.L14:
+  55:ui.c          ****   {
+  56:ui.c          ****     case CLEAR_SCREEN:  // Easy and fairly self-explanatory.
+  57:ui.c          ****     lcdClearScreen();
+  58:ui.c          ****     break;
+  59:ui.c          ****     
+  60:ui.c          **** 	// Removed to save space ~Kyle
+  61:ui.c          ****     /* case RUN_DEMO:      // Some sort of wonky song-and-dance to show off.
+  62:ui.c          ****     lcdClearScreen();
+  63:ui.c          ****     demo();
+  64:ui.c          ****     reverse ^= 0x01;
+  65:ui.c          ****     lcdClearScreen();
+  66:ui.c          ****     demo();
+  67:ui.c          ****     reverse ^= 0x01;
+  68:ui.c          ****     lcdClearScreen();
+  69:ui.c          ****     break;	*/
+  70:ui.c          ****     
+  71:ui.c          ****     case TOGGLE_BGND:   // Switch between reverse mode and normal mode.
+  72:ui.c          ****       reverse ^= 0x01;
+  90               		.loc 1 72 0
+  91 0026 8091 0000 		lds r24,reverse
+  92 002a 91E0      		ldi r25,lo8(1)
+  93 002c 8927      		eor r24,r25
+  94 002e 8093 0000 		sts reverse,r24
+  73:ui.c          ****       toggleReverse();
+  95               		.loc 1 73 0
+  96 0032 0E94 0000 		call toggleReverse
+  97               	.LVL3:
+  98               	.L106:
+  99               	/* epilogue start */
+  74:ui.c          ****       lcdClearScreen();
+  75:ui.c          ****     break;
+  76:ui.c          ****     
+  77:ui.c          ****     case TOGGLE_SPLASH: // Turn the splash-on-startup SparkFun logo off.
+  78:ui.c          ****       toggleSplash();
+  79:ui.c          ****     break;
+  80:ui.c          ****     
+  81:ui.c          ****     case ADJ_BL_LEVEL:  // The first real, meaty command. Adjust the backlight.
+  82:ui.c          ****       while(1)  // Stay here until we are *told* to leave.
+  83:ui.c          ****       {
+  84:ui.c          ****         // If there's data in the serial buffer, move it to the cmdBuffer.
+  85:ui.c          ****         if (bufferSize > 0)
+  86:ui.c          ****         {
+  87:ui.c          ****           cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+  88:ui.c          ****         }
+  89:ui.c          ****         // This command is a one-byte command; once the count of bytes in the
+  90:ui.c          ****         //  command buffer is greater than 0, we want to parse the command.
+  91:ui.c          ****         if (cmdBufferPtr > 0)
+  92:ui.c          ****         {
+  93:ui.c          ****           cmdBufferPtr = 0;  // Reset the command buffer pointer.
+  94:ui.c          ****           // We need to make sure our level never exceeds 100, or weird
+  95:ui.c          ****           //   things can happen to the PWM generator.
+  96:ui.c          ****           if ((uint8_t)cmdBuffer[0] > 100) cmdBuffer[0] = 100;
+  97:ui.c          ****           // Set the backlight level- this is an alias to the actual register,
+  98:ui.c          ****           //  renamed for convenience.
+  99:ui.c          ****           BL_LEVEL = cmdBuffer[0];
+ 100:ui.c          ****           // Store the new value in EEPROM.
+ 101:ui.c          ****           setBacklightLevel(cmdBuffer[0]);
+ 102:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 103:ui.c          ****         }
+ 104:ui.c          ****       }
+ 105:ui.c          ****     break;
+ 106:ui.c          ****     
+ 107:ui.c          ****     case ADJ_BAUD_RATE:
+ 108:ui.c          ****       while(1)  // Stay here until we are *told* to leave.
+ 109:ui.c          ****       {
+ 110:ui.c          ****         if (bufferSize > 0)
+ 111:ui.c          ****         {
+ 112:ui.c          ****           cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 113:ui.c          ****         }
+ 114:ui.c          ****         // Again, a one-byte command. Once we have a byte in the cmdBuffer,
+ 115:ui.c          ****         //  parse it.
+ 116:ui.c          ****         if (cmdBufferPtr > 0)
+ 117:ui.c          ****         {
+ 118:ui.c          ****           cmdBufferPtr = 0;
+ 119:ui.c          ****           setBaudRate(cmdBuffer[0]); // This will reject invalid settings,
+ 120:ui.c          ****                                      //   which is to say, anything outside
+ 121:ui.c          ****                                      //   of the range ASCII 1-6.
+ 122:ui.c          ****           switch(cmdBuffer[0])
+ 123:ui.c          ****           {
+ 124:ui.c          ****             case '1':
+ 125:ui.c          ****             serialInit(BR4800);
+ 126:ui.c          ****             break;
+ 127:ui.c          ****             case '2':
+ 128:ui.c          ****             serialInit(BR9600);
+ 129:ui.c          ****             break;
+ 130:ui.c          ****             case '3':
+ 131:ui.c          ****             serialInit(BR19200);
+ 132:ui.c          ****             break;
+ 133:ui.c          ****             case '4':
+ 134:ui.c          ****             serialInit(BR38400);
+ 135:ui.c          ****             break;
+ 136:ui.c          ****             case '5':
+ 137:ui.c          ****             serialInit(BR57600);
+ 138:ui.c          ****             break;
+ 139:ui.c          ****             case '6':
+ 140:ui.c          ****             serialInit(BR115200);
+ 141:ui.c          ****             break;
+ 142:ui.c          ****             default: // If we have an invalid entry, we'll just ignore it.
+ 143:ui.c          ****             break;
+ 144:ui.c          ****           }
+ 145:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 146:ui.c          ****         }
+ 147:ui.c          ****       }
+ 148:ui.c          ****     break;
+ 149:ui.c          ****     
+ 150:ui.c          ****     case ADJ_TEXT_X: // This is the x-origin of our text "window".
+ 151:ui.c          ****       while(1)  // Stay here until we are *told* to leave.
+ 152:ui.c          ****       {
+ 153:ui.c          ****         if (bufferSize > 0)
+ 154:ui.c          ****         {
+ 155:ui.c          ****           cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 156:ui.c          ****         }
+ 157:ui.c          ****         // Again, one-byte command.
+ 158:ui.c          ****         if (cmdBufferPtr > 0)
+ 159:ui.c          ****         {
+ 160:ui.c          ****           cmdBufferPtr = 0;
+ 161:ui.c          ****           // The most recent byte is the new X origin of the text window- IF it
+ 162:ui.c          ****           //   makes sense. It only makes sense if it is at least 6 pixels from
+ 163:ui.c          ****           //   the right edge of the screen. We use the xDim variable from
+ 164:ui.c          ****           //   lcd.c to make sure we don't botch that. Ignore invalid input.
+ 165:ui.c          ****           if (cmdBuffer[0] <= (xDim-6))
+ 166:ui.c          ****           {
+ 167:ui.c          ****             textOrigin[0] = cmdBuffer[0];
+ 168:ui.c          ****             cursorPos[0] = textOrigin[0];
+ 169:ui.c          ****             textLength = 0;
+ 170:ui.c          ****           }
+ 171:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 172:ui.c          ****         }
+ 173:ui.c          ****       }
+ 174:ui.c          ****     break;
+ 175:ui.c          ****     
+ 176:ui.c          ****     case ADJ_TEXT_Y:
+ 177:ui.c          ****       while(1)  // Stay here until we are *told* to leave.
+ 178:ui.c          ****       {
+ 179:ui.c          ****         if (bufferSize > 0)
+ 180:ui.c          ****         {
+ 181:ui.c          ****           cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 182:ui.c          ****         }
+ 183:ui.c          ****         // One byte command.
+ 184:ui.c          ****         if (cmdBufferPtr > 0)
+ 185:ui.c          ****         {
+ 186:ui.c          ****           cmdBufferPtr = 0;
+ 187:ui.c          ****           // The most recent byte is the new Y origin of the text window- IF it
+ 188:ui.c          ****           //   makes sense. It only makes sense if it is at least 8 pixels from
+ 189:ui.c          ****           //   the bottom edge of the screen. Use the yDim variable from lcd.c
+ 190:ui.c          ****           //   to make sure we don't botch that. Ignore invalid input.
+ 191:ui.c          ****           if (cmdBuffer[0] <= (yDim-8))
+ 192:ui.c          ****           {
+ 193:ui.c          ****             textOrigin[1] = cmdBuffer[0];
+ 194:ui.c          ****             cursorPos[1] = textOrigin[1];
+ 195:ui.c          ****             textLength = 0;
+ 196:ui.c          ****           }
+ 197:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 198:ui.c          ****         }
+ 199:ui.c          ****       }
+ 200:ui.c          ****     break;
+ 201:ui.c          ****     
+ 202:ui.c          ****     case DRAW_PIXEL:
+ 203:ui.c          ****       while(1)  // Stay here until we are *told* to leave.
+ 204:ui.c          ****       {
+ 205:ui.c          ****         if (bufferSize > 0)
+ 206:ui.c          ****         {
+ 207:ui.c          ****           cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 208:ui.c          ****         }
+ 209:ui.c          ****         // This is a three-value command- x, y, ON/OFF.
+ 210:ui.c          ****         if (cmdBufferPtr > 2)
+ 211:ui.c          ****         {
+ 212:ui.c          ****           cmdBufferPtr = 0;
+ 213:ui.c          ****           // If the user *specifically* sends a 0 for the third byte, turn
+ 214:ui.c          ****           //  the pixel off. Otherwise, turn it on.
+ 215:ui.c          ****           if (cmdBuffer[2] == 0) pixel = OFF;
+ 216:ui.c          ****           lcdDrawPixel(cmdBuffer[0], cmdBuffer[1], pixel);
+ 217:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 218:ui.c          ****         }
+ 219:ui.c          ****       }
+ 220:ui.c          ****     break;
+ 221:ui.c          ****     
+ 222:ui.c          ****     case DRAW_LINE:      
+ 223:ui.c          ****     while(1)  // Stay here until we are *told* to leave.
+ 224:ui.c          ****       {
+ 225:ui.c          ****         if (bufferSize > 0)
+ 226:ui.c          ****         {
+ 227:ui.c          ****           cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 228:ui.c          ****         }
+ 229:ui.c          ****         // Five-byte command.
+ 230:ui.c          ****         if (cmdBufferPtr > 4)
+ 231:ui.c          ****         {
+ 232:ui.c          ****           cmdBufferPtr = 0;
+ 233:ui.c          ****           // Same sort of logic- if the user sends a 0 for the pixel value,
+ 234:ui.c          ****           //  turn pixels off, otherwise, turn them on.
+ 235:ui.c          ****           if (cmdBuffer[4] == 0) pixel = OFF;
+ 236:ui.c          ****           lcdDrawLine(cmdBuffer[0], cmdBuffer[1], // start point x,y
+ 237:ui.c          ****                       cmdBuffer[2], cmdBuffer[3], // end point x,y
+ 238:ui.c          ****                       pixel);                     // draw or erase?
+ 239:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 240:ui.c          ****         }
+ 241:ui.c          ****       }
+ 242:ui.c          ****     
+ 243:ui.c          ****     break;
+ 244:ui.c          ****     
+ 245:ui.c          ****     case DRAW_CIRCLE:      
+ 246:ui.c          ****     while(1)  // Stay here until we are *told* to leave.
+ 247:ui.c          ****       {
+ 248:ui.c          ****         if (bufferSize > 0)
+ 249:ui.c          ****         {
+ 250:ui.c          ****           cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 251:ui.c          ****         }
+ 252:ui.c          ****         // Four-byte command.
+ 253:ui.c          ****         if (cmdBufferPtr > 3)
+ 254:ui.c          ****         {
+ 255:ui.c          ****           cmdBufferPtr = 0;
+ 256:ui.c          ****           if (cmdBuffer[3] == 0) pixel = OFF;
+ 257:ui.c          ****           lcdDrawCircle(cmdBuffer[0], cmdBuffer[1], // center point x,y
+ 258:ui.c          ****                         cmdBuffer[2],               // radius
+ 259:ui.c          ****                         pixel);                     // draw or erase?
+ 260:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 261:ui.c          ****         }
+ 262:ui.c          ****       }
+ 263:ui.c          ****  
+ 264:ui.c          ****     break;
+ 265:ui.c          ****     
+ 266:ui.c          ****     case DRAW_BOX:    
+ 267:ui.c          ****     while(1)  // Stay here until we are *told* to leave.
+ 268:ui.c          ****       {
+ 269:ui.c          ****         if (bufferSize > 0)
+ 270:ui.c          ****         {
+ 271:ui.c          ****           cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 272:ui.c          ****         }
+ 273:ui.c          ****         // Five-byte command.
+ 274:ui.c          ****         if (cmdBufferPtr > 4)
+ 275:ui.c          ****         {
+ 276:ui.c          ****           cmdBufferPtr = 0;
+ 277:ui.c          ****           if (cmdBuffer[4] == 0) pixel = OFF;
+ 278:ui.c          ****           lcdDrawBox(cmdBuffer[0], cmdBuffer[1], // start point x,y
+ 279:ui.c          ****                      cmdBuffer[2], cmdBuffer[3], // end point x,y
+ 280:ui.c          ****                      pixel);                     // draw or erase?
+ 281:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 282:ui.c          ****         }
+ 283:ui.c          ****       }
+ 284:ui.c          ****     
+ 285:ui.c          ****     break;
+ 286:ui.c          ****     
+ 287:ui.c          ****     case ERASE_BLOCK:    
+ 288:ui.c          ****     while(1)  // Stay here until we are *told* to leave.
+ 289:ui.c          ****       {
+ 290:ui.c          ****         if (bufferSize > 0)
+ 291:ui.c          ****         {
+ 292:ui.c          ****           cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 293:ui.c          ****         }
+ 294:ui.c          ****         // Four-byte command.
+ 295:ui.c          ****         if (cmdBufferPtr > 3)
+ 296:ui.c          ****         {
+ 297:ui.c          ****           cmdBufferPtr = 0;
+ 298:ui.c          ****           lcdEraseBlock(cmdBuffer[0], cmdBuffer[1], // start point x,y
+ 299:ui.c          ****                         cmdBuffer[2], cmdBuffer[3]); // end point x,y
+ 300:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 301:ui.c          ****         }
+ 302:ui.c          ****       }
+ 303:ui.c          ****     break;    
+ 304:ui.c          ****     
+ 305:ui.c          ****     case DRAW_SPRITE:      
+ 306:ui.c          ****     while(1)  // Stay here until we are *told* to leave.
+ 307:ui.c          ****       {
+ 308:ui.c          ****         if (bufferSize > 0)
+ 309:ui.c          ****         {
+ 310:ui.c          ****           cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 311:ui.c          ****         }
+ 312:ui.c          ****         // Five-byte command.
+ 313:ui.c          ****         if (cmdBufferPtr > 4)
+ 314:ui.c          ****         {
+ 315:ui.c          ****           cmdBufferPtr = 0;
+ 316:ui.c          ****           if (cmdBuffer[4] == 0) pixel = OFF;
+ 317:ui.c          ****           lcdDrawSprite(cmdBuffer[0], cmdBuffer[1], // upper left x,y
+ 318:ui.c          ****                         cmdBuffer[2],               // sprite index
+ 319:ui.c          ****                         cmdBuffer[3],               // rotation angle
+ 320:ui.c          ****                         pixel);                     // draw or erase?
+ 321:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 322:ui.c          ****         }
+ 323:ui.c          ****       }
+ 324:ui.c          ****  
+ 325:ui.c          ****     break;
+ 326:ui.c          **** 	
+ 327:ui.c          **** 	case DRAW_BIG:
+ 328:ui.c          **** 		while(1){
+ 329:ui.c          **** 			if(bufferSize > 0){
+ 330:ui.c          **** 				cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 331:ui.c          **** 			}
+ 332:ui.c          **** 			// 3 byte command
+ 333:ui.c          **** 			if(cmdBufferPtr > 2){
+ 334:ui.c          **** 				cmdBufferPtr = 0;
+ 335:ui.c          **** 				lcdDrawBig(cmdBuffer[0], cmdBuffer[1], cmdBuffer[2]);
+ 336:ui.c          **** 				
+ 337:ui.c          **** 			}
+ 338:ui.c          **** 		}
+ 339:ui.c          **** 	
+ 340:ui.c          **** 	break;
+ 341:ui.c          **** 	
+ 342:ui.c          ****     
+ 343:ui.c          ****     default: // if the character that followed the '|' is not a valid command,
+ 344:ui.c          ****     break;   //  ignore it.
+ 345:ui.c          ****   }
+ 346:ui.c          **** }
+ 100               		.loc 1 346 0
+ 101 0036 0F90      		pop __tmp_reg__
+ 102 0038 0F90      		pop __tmp_reg__
+ 103 003a 0F90      		pop __tmp_reg__
+ 104 003c 0F90      		pop __tmp_reg__
+ 105 003e 0F90      		pop __tmp_reg__
+ 106 0040 DF91      		pop r29
+ 107 0042 CF91      		pop r28
+ 108 0044 1F91      		pop r17
+ 109 0046 0F91      		pop r16
+  74:ui.c          ****       lcdClearScreen();
+ 110               		.loc 1 74 0
+ 111 0048 0C94 0000 		jmp lcdClearScreen
+ 112               	.LVL4:
+ 113               	.L15:
+ 114               	/* epilogue start */
+ 115               		.loc 1 346 0
+ 116 004c 0F90      		pop __tmp_reg__
+ 117 004e 0F90      		pop __tmp_reg__
+ 118 0050 0F90      		pop __tmp_reg__
+ 119 0052 0F90      		pop __tmp_reg__
+ 120 0054 0F90      		pop __tmp_reg__
+ 121 0056 DF91      		pop r29
+ 122 0058 CF91      		pop r28
+ 123 005a 1F91      		pop r17
+ 124 005c 0F91      		pop r16
+  78:ui.c          ****     break;
+ 125               		.loc 1 78 0
+ 126 005e 0C94 0000 		jmp toggleSplash
+ 127               	.LVL5:
+ 128               	.L21:
+  85:ui.c          ****         {
+ 129               		.loc 1 85 0
+ 130 0062 8091 0000 		lds r24,bufferSize
+ 131 0066 8823      		tst r24
+ 132 0068 01F0      		breq .L21
+ 133               	.LVL6:
+  87:ui.c          ****         }
+ 134               		.loc 1 87 0
+ 135 006a 0E94 0000 		call serialBufferPop
+ 136               	.LVL7:
+ 137 006e 8983      		std Y+1,r24
+ 138               	.LVL8:
+  96:ui.c          ****           // Set the backlight level- this is an alias to the actual register,
+ 139               		.loc 1 96 0
+ 140 0070 8536      		cpi r24,lo8(101)
+ 141 0072 00F0      		brlo .L20
+  96:ui.c          ****           // Set the backlight level- this is an alias to the actual register,
+ 142               		.loc 1 96 0 is_stmt 0 discriminator 1
+ 143 0074 84E6      		ldi r24,lo8(100)
+ 144 0076 8983      		std Y+1,r24
+ 145               	.L20:
+  99:ui.c          ****           // Store the new value in EEPROM.
+ 146               		.loc 1 99 0 is_stmt 1
+ 147 0078 8981      		ldd r24,Y+1
+ 148 007a 90E0      		ldi r25,0
+ 149 007c 9093 8B00 		sts 138+1,r25
+ 150 0080 8093 8A00 		sts 138,r24
+ 101:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 151               		.loc 1 101 0
+ 152 0084 8981      		ldd r24,Y+1
+ 153               	/* epilogue start */
+ 154               		.loc 1 346 0
+ 155 0086 0F90      		pop __tmp_reg__
+ 156 0088 0F90      		pop __tmp_reg__
+ 157 008a 0F90      		pop __tmp_reg__
+ 158 008c 0F90      		pop __tmp_reg__
+ 159 008e 0F90      		pop __tmp_reg__
+ 160 0090 DF91      		pop r29
+ 161 0092 CF91      		pop r28
+ 162 0094 1F91      		pop r17
+ 163 0096 0F91      		pop r16
+ 101:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 164               		.loc 1 101 0
+ 165 0098 0C94 0000 		jmp setBacklightLevel
+ 166               	.LVL9:
+ 167               	.L30:
+ 110:ui.c          ****         {
+ 168               		.loc 1 110 0
+ 169 009c 8091 0000 		lds r24,bufferSize
+ 170 00a0 8823      		tst r24
+ 171 00a2 01F0      		breq .L30
+ 172               	.LVL10:
+ 112:ui.c          ****         }
+ 173               		.loc 1 112 0
+ 174 00a4 0E94 0000 		call serialBufferPop
+ 175               	.LVL11:
+ 176 00a8 182F      		mov r17,r24
+ 177               	.LVL12:
+ 119:ui.c          ****                                      //   which is to say, anything outside
+ 178               		.loc 1 119 0
+ 179 00aa 0E94 0000 		call setBaudRate
+ 180               	.LVL13:
+ 122:ui.c          ****           {
+ 181               		.loc 1 122 0
+ 182 00ae 1333      		cpi r17,lo8(51)
+ 183 00b0 01F0      		breq .L23
+ 184 00b2 00F4      		brsh .L24
+ 185 00b4 1133      		cpi r17,lo8(49)
+ 186 00b6 01F0      		breq .L25
+ 187 00b8 1233      		cpi r17,lo8(50)
+ 188 00ba 01F0      		breq .+2
+ 189 00bc 00C0      		rjmp .L1
+ 128:ui.c          ****             break;
+ 190               		.loc 1 128 0
+ 191 00be 8FEC      		ldi r24,lo8(-49)
+ 192 00c0 90E0      		ldi r25,0
+ 193 00c2 00C0      		rjmp .L107
+ 194               	.L24:
+ 122:ui.c          ****           {
+ 195               		.loc 1 122 0
+ 196 00c4 1533      		cpi r17,lo8(53)
+ 197 00c6 01F0      		breq .L27
+ 198 00c8 00F0      		brlo .L28
+ 199 00ca 1633      		cpi r17,lo8(54)
+ 200 00cc 01F0      		breq .+2
+ 201 00ce 00C0      		rjmp .L1
+ 140:ui.c          ****             break;
+ 202               		.loc 1 140 0
+ 203 00d0 80E1      		ldi r24,lo8(16)
+ 204 00d2 90E0      		ldi r25,0
+ 205 00d4 00C0      		rjmp .L107
+ 206               	.L25:
+ 125:ui.c          ****             break;
+ 207               		.loc 1 125 0
+ 208 00d6 80EA      		ldi r24,lo8(-96)
+ 209 00d8 91E0      		ldi r25,lo8(1)
+ 210 00da 00C0      		rjmp .L107
+ 211               	.L23:
+ 131:ui.c          ****             break;
+ 212               		.loc 1 131 0
+ 213 00dc 87E6      		ldi r24,lo8(103)
+ 214 00de 90E0      		ldi r25,0
+ 215               	.L107:
+ 216               	/* epilogue start */
+ 217               		.loc 1 346 0
+ 218 00e0 0F90      		pop __tmp_reg__
+ 219 00e2 0F90      		pop __tmp_reg__
+ 220 00e4 0F90      		pop __tmp_reg__
+ 221 00e6 0F90      		pop __tmp_reg__
+ 222 00e8 0F90      		pop __tmp_reg__
+ 223 00ea DF91      		pop r29
+ 224 00ec CF91      		pop r28
+ 225 00ee 1F91      		pop r17
+ 226 00f0 0F91      		pop r16
+ 128:ui.c          ****             break;
+ 227               		.loc 1 128 0
+ 228 00f2 0C94 0000 		jmp serialInit
+ 229               	.LVL14:
+ 230               	.L28:
+ 134:ui.c          ****             break;
+ 231               		.loc 1 134 0
+ 232 00f6 83E3      		ldi r24,lo8(51)
+ 233 00f8 90E0      		ldi r25,0
+ 234 00fa 00C0      		rjmp .L107
+ 235               	.L27:
+ 137:ui.c          ****             break;
+ 236               		.loc 1 137 0
+ 237 00fc 82E2      		ldi r24,lo8(34)
+ 238 00fe 90E0      		ldi r25,0
+ 239 0100 00C0      		rjmp .L107
+ 240               	.L34:
+ 153:ui.c          ****         {
+ 241               		.loc 1 153 0
+ 242 0102 8091 0000 		lds r24,bufferSize
+ 243 0106 8823      		tst r24
+ 244 0108 01F0      		breq .L34
+ 245               	.LVL15:
+ 155:ui.c          ****         }
+ 246               		.loc 1 155 0
+ 247 010a 0E94 0000 		call serialBufferPop
+ 248               	.LVL16:
+ 165:ui.c          ****           {
+ 249               		.loc 1 165 0
+ 250 010e 2091 0000 		lds r18,xDim
+ 251 0112 30E0      		ldi r19,0
+ 252 0114 2550      		subi r18,5
+ 253 0116 3109      		sbc r19,__zero_reg__
+ 254 0118 482F      		mov r20,r24
+ 255 011a 50E0      		ldi r21,0
+ 256 011c 4217      		cp r20,r18
+ 257 011e 5307      		cpc r21,r19
+ 258 0120 04F0      		brlt .+2
+ 259 0122 00C0      		rjmp .L1
+ 167:ui.c          ****             cursorPos[0] = textOrigin[0];
+ 260               		.loc 1 167 0
+ 261 0124 8093 0000 		sts textOrigin,r24
+ 168:ui.c          ****             textLength = 0;
+ 262               		.loc 1 168 0
+ 263 0128 8093 0000 		sts cursorPos,r24
+ 264 012c 00C0      		rjmp .L105
+ 265               	.L37:
+ 179:ui.c          ****         {
+ 266               		.loc 1 179 0
+ 267 012e 8091 0000 		lds r24,bufferSize
+ 268 0132 8823      		tst r24
+ 269 0134 01F0      		breq .L37
+ 270               	.LVL17:
+ 181:ui.c          ****         }
+ 271               		.loc 1 181 0
+ 272 0136 0E94 0000 		call serialBufferPop
+ 273               	.LVL18:
+ 191:ui.c          ****           {
+ 274               		.loc 1 191 0
+ 275 013a 2091 0000 		lds r18,yDim
+ 276 013e 30E0      		ldi r19,0
+ 277 0140 2750      		subi r18,7
+ 278 0142 3109      		sbc r19,__zero_reg__
+ 279 0144 482F      		mov r20,r24
+ 280 0146 50E0      		ldi r21,0
+ 281 0148 4217      		cp r20,r18
+ 282 014a 5307      		cpc r21,r19
+ 283 014c 04F0      		brlt .+2
+ 284 014e 00C0      		rjmp .L1
+ 193:ui.c          ****             cursorPos[1] = textOrigin[1];
+ 285               		.loc 1 193 0
+ 286 0150 8093 0000 		sts textOrigin+1,r24
+ 194:ui.c          ****             textLength = 0;
+ 287               		.loc 1 194 0
+ 288 0154 8093 0000 		sts cursorPos+1,r24
+ 289               	.L105:
+ 195:ui.c          ****           }
+ 290               		.loc 1 195 0
+ 291 0158 1092 0000 		sts textLength+1,__zero_reg__
+ 292 015c 1092 0000 		sts textLength,__zero_reg__
+ 293 0160 00C0      		rjmp .L1
+ 294               	.L13:
+  54:ui.c          ****   {
+ 295               		.loc 1 54 0
+ 296 0162 10E0      		ldi r17,0
+ 297               	.LVL19:
+ 298               	.L40:
+ 205:ui.c          ****         {
+ 299               		.loc 1 205 0
+ 300 0164 8091 0000 		lds r24,bufferSize
+ 301 0168 8823      		tst r24
+ 302 016a 01F0      		breq .L38
+ 207:ui.c          ****         }
+ 303               		.loc 1 207 0
+ 304 016c 01E0      		ldi r16,lo8(1)
+ 305 016e 010F      		add r16,r17
+ 306               	.LVL20:
+ 307 0170 0E94 0000 		call serialBufferPop
+ 308               	.LVL21:
+ 309 0174 E1E0      		ldi r30,lo8(1)
+ 310 0176 F0E0      		ldi r31,0
+ 311 0178 EC0F      		add r30,r28
+ 312 017a FD1F      		adc r31,r29
+ 313 017c E10F      		add r30,r17
+ 314 017e F11D      		adc r31,__zero_reg__
+ 315 0180 8083      		st Z,r24
+ 316 0182 102F      		mov r17,r16
+ 317               	.LVL22:
+ 318               	.L38:
+ 210:ui.c          ****         {
+ 319               		.loc 1 210 0
+ 320 0184 1330      		cpi r17,lo8(3)
+ 321 0186 00F0      		brlo .L40
+ 322               	.LVL23:
+ 215:ui.c          ****           lcdDrawPixel(cmdBuffer[0], cmdBuffer[1], pixel);
+ 323               		.loc 1 215 0
+ 324 0188 41E0      		ldi r20,lo8(1)
+ 325 018a 8B81      		ldd r24,Y+3
+ 326 018c 8111      		cpse r24,__zero_reg__
+ 327 018e 40E0      		ldi r20,0
+ 328               	.L41:
+ 216:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 329               		.loc 1 216 0
+ 330 0190 6A81      		ldd r22,Y+2
+ 331 0192 8981      		ldd r24,Y+1
+ 332               	/* epilogue start */
+ 333               		.loc 1 346 0
+ 334 0194 0F90      		pop __tmp_reg__
+ 335 0196 0F90      		pop __tmp_reg__
+ 336 0198 0F90      		pop __tmp_reg__
+ 337 019a 0F90      		pop __tmp_reg__
+ 338 019c 0F90      		pop __tmp_reg__
+ 339 019e DF91      		pop r29
+ 340 01a0 CF91      		pop r28
+ 341               	.LVL24:
+ 342 01a2 1F91      		pop r17
+ 343               	.LVL25:
+ 344 01a4 0F91      		pop r16
+ 345               	.LVL26:
+ 216:ui.c          ****           break; // This is where we tell to code to leave the while loop.
+ 346               		.loc 1 216 0
+ 347 01a6 0C94 0000 		jmp lcdDrawPixel
+ 348               	.LVL27:
+ 349               	.L11:
+  54:ui.c          ****   {
+ 350               		.loc 1 54 0
+ 351 01aa 10E0      		ldi r17,0
+ 352               	.LVL28:
+ 353               	.L44:
+ 225:ui.c          ****         {
+ 354               		.loc 1 225 0
+ 355 01ac 8091 0000 		lds r24,bufferSize
+ 356 01b0 8823      		tst r24
+ 357 01b2 01F0      		breq .L42
+ 227:ui.c          ****         }
+ 358               		.loc 1 227 0
+ 359 01b4 01E0      		ldi r16,lo8(1)
+ 360 01b6 010F      		add r16,r17
+ 361               	.LVL29:
+ 362 01b8 0E94 0000 		call serialBufferPop
+ 363               	.LVL30:
+ 364 01bc E1E0      		ldi r30,lo8(1)
+ 365 01be F0E0      		ldi r31,0
+ 366 01c0 EC0F      		add r30,r28
+ 367 01c2 FD1F      		adc r31,r29
+ 368 01c4 E10F      		add r30,r17
+ 369 01c6 F11D      		adc r31,__zero_reg__
+ 370 01c8 8083      		st Z,r24
+ 371 01ca 102F      		mov r17,r16
+ 372               	.LVL31:
+ 373               	.L42:
+ 230:ui.c          ****         {
+ 374               		.loc 1 230 0
+ 375 01cc 1530      		cpi r17,lo8(5)
+ 376 01ce 00F0      		brlo .L44
+ 377               	.LVL32:
+ 235:ui.c          ****           lcdDrawLine(cmdBuffer[0], cmdBuffer[1], // start point x,y
+ 378               		.loc 1 235 0
+ 379 01d0 01E0      		ldi r16,lo8(1)
+ 380 01d2 8D81      		ldd r24,Y+5
+ 381 01d4 8111      		cpse r24,__zero_reg__
+ 382 01d6 00E0      		ldi r16,0
+ 383               	.L45:
+ 236:ui.c          ****                       cmdBuffer[2], cmdBuffer[3], // end point x,y
+ 384               		.loc 1 236 0
+ 385 01d8 2C81      		ldd r18,Y+4
+ 386 01da 4B81      		ldd r20,Y+3
+ 387 01dc 6A81      		ldd r22,Y+2
+ 388 01de 8981      		ldd r24,Y+1
+ 389 01e0 0E94 0000 		call lcdDrawLine
+ 390               	.LVL33:
+ 243:ui.c          ****     
+ 391               		.loc 1 243 0
+ 392 01e4 00C0      		rjmp .L1
+ 393               	.LVL34:
+ 394               	.L6:
+  54:ui.c          ****   {
+ 395               		.loc 1 54 0
+ 396 01e6 10E0      		ldi r17,0
+ 397               	.LVL35:
+ 398               	.L48:
+ 248:ui.c          ****         {
+ 399               		.loc 1 248 0
+ 400 01e8 8091 0000 		lds r24,bufferSize
+ 401 01ec 8823      		tst r24
+ 402 01ee 01F0      		breq .L46
+ 250:ui.c          ****         }
+ 403               		.loc 1 250 0
+ 404 01f0 01E0      		ldi r16,lo8(1)
+ 405 01f2 010F      		add r16,r17
+ 406               	.LVL36:
+ 407 01f4 0E94 0000 		call serialBufferPop
+ 408               	.LVL37:
+ 409 01f8 E1E0      		ldi r30,lo8(1)
+ 410 01fa F0E0      		ldi r31,0
+ 411 01fc EC0F      		add r30,r28
+ 412 01fe FD1F      		adc r31,r29
+ 413 0200 E10F      		add r30,r17
+ 414 0202 F11D      		adc r31,__zero_reg__
+ 415 0204 8083      		st Z,r24
+ 416 0206 102F      		mov r17,r16
+ 417               	.LVL38:
+ 418               	.L46:
+ 253:ui.c          ****         {
+ 419               		.loc 1 253 0
+ 420 0208 1430      		cpi r17,lo8(4)
+ 421 020a 00F0      		brlo .L48
+ 422               	.LVL39:
+ 256:ui.c          ****           lcdDrawCircle(cmdBuffer[0], cmdBuffer[1], // center point x,y
+ 423               		.loc 1 256 0
+ 424 020c 21E0      		ldi r18,lo8(1)
+ 425 020e 8C81      		ldd r24,Y+4
+ 426 0210 8111      		cpse r24,__zero_reg__
+ 427 0212 20E0      		ldi r18,0
+ 428               	.L49:
+ 257:ui.c          ****                         cmdBuffer[2],               // radius
+ 429               		.loc 1 257 0
+ 430 0214 4B81      		ldd r20,Y+3
+ 431 0216 6A81      		ldd r22,Y+2
+ 432 0218 8981      		ldd r24,Y+1
+ 433               	/* epilogue start */
+ 434               		.loc 1 346 0
+ 435 021a 0F90      		pop __tmp_reg__
+ 436 021c 0F90      		pop __tmp_reg__
+ 437 021e 0F90      		pop __tmp_reg__
+ 438 0220 0F90      		pop __tmp_reg__
+ 439 0222 0F90      		pop __tmp_reg__
+ 440 0224 DF91      		pop r29
+ 441 0226 CF91      		pop r28
+ 442               	.LVL40:
+ 443 0228 1F91      		pop r17
+ 444               	.LVL41:
+ 445 022a 0F91      		pop r16
+ 446               	.LVL42:
+ 257:ui.c          ****                         cmdBuffer[2],               // radius
+ 447               		.loc 1 257 0
+ 448 022c 0C94 0000 		jmp lcdDrawCircle
+ 449               	.LVL43:
+ 450               	.L12:
+  54:ui.c          ****   {
+ 451               		.loc 1 54 0
+ 452 0230 10E0      		ldi r17,0
+ 453               	.LVL44:
+ 454               	.L52:
+ 269:ui.c          ****         {
+ 455               		.loc 1 269 0
+ 456 0232 8091 0000 		lds r24,bufferSize
+ 457 0236 8823      		tst r24
+ 458 0238 01F0      		breq .L50
+ 271:ui.c          ****         }
+ 459               		.loc 1 271 0
+ 460 023a 01E0      		ldi r16,lo8(1)
+ 461 023c 010F      		add r16,r17
+ 462               	.LVL45:
+ 463 023e 0E94 0000 		call serialBufferPop
+ 464               	.LVL46:
+ 465 0242 E1E0      		ldi r30,lo8(1)
+ 466 0244 F0E0      		ldi r31,0
+ 467 0246 EC0F      		add r30,r28
+ 468 0248 FD1F      		adc r31,r29
+ 469 024a E10F      		add r30,r17
+ 470 024c F11D      		adc r31,__zero_reg__
+ 471 024e 8083      		st Z,r24
+ 472 0250 102F      		mov r17,r16
+ 473               	.LVL47:
+ 474               	.L50:
+ 274:ui.c          ****         {
+ 475               		.loc 1 274 0
+ 476 0252 1530      		cpi r17,lo8(5)
+ 477 0254 00F0      		brlo .L52
+ 478               	.LVL48:
+ 277:ui.c          ****           lcdDrawBox(cmdBuffer[0], cmdBuffer[1], // start point x,y
+ 479               		.loc 1 277 0
+ 480 0256 01E0      		ldi r16,lo8(1)
+ 481 0258 8D81      		ldd r24,Y+5
+ 482 025a 8111      		cpse r24,__zero_reg__
+ 483 025c 00E0      		ldi r16,0
+ 484               	.L53:
+ 278:ui.c          ****                      cmdBuffer[2], cmdBuffer[3], // end point x,y
+ 485               		.loc 1 278 0
+ 486 025e 2C81      		ldd r18,Y+4
+ 487 0260 4B81      		ldd r20,Y+3
+ 488 0262 6A81      		ldd r22,Y+2
+ 489 0264 8981      		ldd r24,Y+1
+ 490 0266 0E94 0000 		call lcdDrawBox
+ 491               	.LVL49:
+ 285:ui.c          ****     
+ 492               		.loc 1 285 0
+ 493 026a 00C0      		rjmp .L1
+ 494               	.LVL50:
+ 495               	.L8:
+  54:ui.c          ****   {
+ 496               		.loc 1 54 0
+ 497 026c 10E0      		ldi r17,0
+ 498               	.LVL51:
+ 499               	.L56:
+ 290:ui.c          ****         {
+ 500               		.loc 1 290 0
+ 501 026e 8091 0000 		lds r24,bufferSize
+ 502 0272 8823      		tst r24
+ 503 0274 01F0      		breq .L54
+ 292:ui.c          ****         }
+ 504               		.loc 1 292 0
+ 505 0276 01E0      		ldi r16,lo8(1)
+ 506 0278 010F      		add r16,r17
+ 507               	.LVL52:
+ 508 027a 0E94 0000 		call serialBufferPop
+ 509               	.LVL53:
+ 510 027e E1E0      		ldi r30,lo8(1)
+ 511 0280 F0E0      		ldi r31,0
+ 512 0282 EC0F      		add r30,r28
+ 513 0284 FD1F      		adc r31,r29
+ 514 0286 E10F      		add r30,r17
+ 515 0288 F11D      		adc r31,__zero_reg__
+ 516 028a 8083      		st Z,r24
+ 517 028c 102F      		mov r17,r16
+ 518               	.LVL54:
+ 519               	.L54:
+ 295:ui.c          ****         {
+ 520               		.loc 1 295 0
+ 521 028e 1430      		cpi r17,lo8(4)
+ 522 0290 00F0      		brlo .L56
+ 523               	.LVL55:
+ 298:ui.c          ****                         cmdBuffer[2], cmdBuffer[3]); // end point x,y
+ 524               		.loc 1 298 0
+ 525 0292 2C81      		ldd r18,Y+4
+ 526 0294 4B81      		ldd r20,Y+3
+ 527 0296 6A81      		ldd r22,Y+2
+ 528 0298 8981      		ldd r24,Y+1
+ 529               	/* epilogue start */
+ 530               		.loc 1 346 0
+ 531 029a 0F90      		pop __tmp_reg__
+ 532 029c 0F90      		pop __tmp_reg__
+ 533 029e 0F90      		pop __tmp_reg__
+ 534 02a0 0F90      		pop __tmp_reg__
+ 535 02a2 0F90      		pop __tmp_reg__
+ 536 02a4 DF91      		pop r29
+ 537 02a6 CF91      		pop r28
+ 538 02a8 1F91      		pop r17
+ 539 02aa 0F91      		pop r16
+ 298:ui.c          ****                         cmdBuffer[2], cmdBuffer[3]); // end point x,y
+ 540               		.loc 1 298 0
+ 541 02ac 0C94 0000 		jmp lcdEraseBlock
+ 542               	.LVL56:
+ 543               	.L10:
+  54:ui.c          ****   {
+ 544               		.loc 1 54 0
+ 545 02b0 10E0      		ldi r17,0
+ 546               	.LVL57:
+ 547               	.L59:
+ 308:ui.c          ****         {
+ 548               		.loc 1 308 0
+ 549 02b2 8091 0000 		lds r24,bufferSize
+ 550 02b6 8823      		tst r24
+ 551 02b8 01F0      		breq .L57
+ 310:ui.c          ****         }
+ 552               		.loc 1 310 0
+ 553 02ba 01E0      		ldi r16,lo8(1)
+ 554 02bc 010F      		add r16,r17
+ 555               	.LVL58:
+ 556 02be 0E94 0000 		call serialBufferPop
+ 557               	.LVL59:
+ 558 02c2 E1E0      		ldi r30,lo8(1)
+ 559 02c4 F0E0      		ldi r31,0
+ 560 02c6 EC0F      		add r30,r28
+ 561 02c8 FD1F      		adc r31,r29
+ 562 02ca E10F      		add r30,r17
+ 563 02cc F11D      		adc r31,__zero_reg__
+ 564 02ce 8083      		st Z,r24
+ 565 02d0 102F      		mov r17,r16
+ 566               	.LVL60:
+ 567               	.L57:
+ 313:ui.c          ****         {
+ 568               		.loc 1 313 0
+ 569 02d2 1530      		cpi r17,lo8(5)
+ 570 02d4 00F0      		brlo .L59
+ 571               	.LVL61:
+ 316:ui.c          ****           lcdDrawSprite(cmdBuffer[0], cmdBuffer[1], // upper left x,y
+ 572               		.loc 1 316 0
+ 573 02d6 01E0      		ldi r16,lo8(1)
+ 574 02d8 8D81      		ldd r24,Y+5
+ 575 02da 8111      		cpse r24,__zero_reg__
+ 576 02dc 00E0      		ldi r16,0
+ 577               	.L60:
+ 317:ui.c          ****                         cmdBuffer[2],               // sprite index
+ 578               		.loc 1 317 0
+ 579 02de 2C81      		ldd r18,Y+4
+ 580 02e0 4B81      		ldd r20,Y+3
+ 581 02e2 6A81      		ldd r22,Y+2
+ 582 02e4 8981      		ldd r24,Y+1
+ 583 02e6 0E94 0000 		call lcdDrawSprite
+ 584               	.LVL62:
+ 325:ui.c          **** 	
+ 585               		.loc 1 325 0
+ 586 02ea 00C0      		rjmp .L1
+ 587               	.LVL63:
+ 588               	.L63:
+ 329:ui.c          **** 				cmdBuffer[cmdBufferPtr++] = serialBufferPop();
+ 589               		.loc 1 329 0
+ 590 02ec 8091 0000 		lds r24,bufferSize
+ 591 02f0 8823      		tst r24
+ 592 02f2 01F0      		breq .L61
+ 330:ui.c          **** 			}
+ 593               		.loc 1 330 0
+ 594 02f4 01E0      		ldi r16,lo8(1)
+ 595 02f6 010F      		add r16,r17
+ 596               	.LVL64:
+ 597 02f8 0E94 0000 		call serialBufferPop
+ 598               	.LVL65:
+ 599 02fc E1E0      		ldi r30,lo8(1)
+ 600 02fe F0E0      		ldi r31,0
+ 601 0300 EC0F      		add r30,r28
+ 602 0302 FD1F      		adc r31,r29
+ 603 0304 E10F      		add r30,r17
+ 604 0306 F11D      		adc r31,__zero_reg__
+ 605 0308 8083      		st Z,r24
+ 606 030a 102F      		mov r17,r16
+ 607               	.LVL66:
+ 608               	.L61:
+ 333:ui.c          **** 				cmdBufferPtr = 0;
+ 609               		.loc 1 333 0
+ 610 030c 1330      		cpi r17,lo8(3)
+ 611 030e 00F0      		brlo .L63
+ 612               	.LVL67:
+ 335:ui.c          **** 				
+ 613               		.loc 1 335 0
+ 614 0310 4B81      		ldd r20,Y+3
+ 615 0312 6A81      		ldd r22,Y+2
+ 616 0314 8981      		ldd r24,Y+1
+ 617 0316 0E94 0000 		call lcdDrawBig
+ 618               	.LVL68:
+ 619               	.L64:
+ 310:ui.c          ****         }
+ 620               		.loc 1 310 0
+ 621 031a 10E0      		ldi r17,0
+ 622 031c 00C0      		rjmp .L63
+ 623               	.LVL69:
+ 624               	.L1:
+ 625               	/* epilogue start */
+ 626               		.loc 1 346 0
+ 627 031e 0F90      		pop __tmp_reg__
+ 628 0320 0F90      		pop __tmp_reg__
+ 629 0322 0F90      		pop __tmp_reg__
+ 630 0324 0F90      		pop __tmp_reg__
+ 631 0326 0F90      		pop __tmp_reg__
+ 632 0328 DF91      		pop r29
+ 633 032a CF91      		pop r28
+ 634 032c 1F91      		pop r17
+ 635 032e 0F91      		pop r16
+ 636 0330 0895      		ret
+ 637               		.cfi_endproc
+ 638               	.LFE1:
+ 640               	.Letext0:
+ 641               		.file 2 "/usr/lib/avr/include/stdint.h"
+ 642               		.file 3 "glcdbp.h"
+ 643               		.file 4 "lcd.h"
+ 644               		.file 5 "nvm.h"
+ 645               		.file 6 "serial.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 ui.c
+     /tmp/ccC7QF52.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccC7QF52.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccC7QF52.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccC7QF52.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccC7QF52.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccC7QF52.s:12     .text:0000000000000000 uiStateMachine
+
+UNDEFINED SYMBOLS
+__tablejump2__
+reverse
+toggleReverse
+lcdClearScreen
+toggleSplash
+bufferSize
+serialBufferPop
+setBacklightLevel
+setBaudRate
+serialInit
+xDim
+textOrigin
+cursorPos
+yDim
+textLength
+lcdDrawPixel
+lcdDrawLine
+lcdDrawCircle
+lcdDrawBox
+lcdEraseBlock
+lcdDrawSprite
+lcdDrawBig

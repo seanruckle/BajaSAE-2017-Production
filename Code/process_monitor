@@ -1,0 +1,17 @@
+#! /bin/bash
+# throw this in cron to 
+#DISPLAY=:0
+#* * * * * bash /.../process_monitor &>/home/.../restartlog.txt
+#* * * * * runs every minute
+# then path to script
+# &> and then path to log file
+
+# replace puma with process name
+case "$(pidof pluma | wc -w)" in
+
+0)  echo "Restarting pluma" #>> path to log file here
+    /usr/bin/pluma &
+    ;;
+1)  # otherwise process is running
+    ;;
+esac

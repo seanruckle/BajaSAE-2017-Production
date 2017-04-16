@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DEFECTS>
+  <DEFECT>
+    <SFA>
+      <FILEPATH>d:\files\kyle\clubs\baja\repository\code\telemetry\utilities\getsetgenerator\</FILEPATH>
+      <FILENAME>getsetgenerator.cpp</FILENAME>
+      <LINE>107</LINE>
+      <COLUMN>8</COLUMN>
+    </SFA>
+    <DEFECTCODE>6031</DEFECTCODE>
+    <DESCRIPTION>Return value ignored: 'fscanf'.</DESCRIPTION>
+    <FUNCTION>GetSetGenerator::readInputFile</FUNCTION>
+    <DECORATED>?readInputFile@GetSetGenerator@@QAE_NXZ</DECORATED>
+    <FUNCLINE>94</FUNCLINE>
+    <PATH></PATH>
+  </DEFECT>
+</DEFECTS>

@@ -1,0 +1,506 @@
+   1               		.file	"serial.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	serialInit
+  12               	serialInit:
+  13               	.LFB0:
+  14               		.file 1 "serial.c"
+   1:serial.c      **** /***************************************************************************
+   2:serial.c      **** serial.c
+   3:serial.c      **** 
+   4:serial.c      **** Serial functionality file for the serial graphical LCD backpack project.
+   5:serial.c      ****  All the various trappings of serial port support- writing data out,
+   6:serial.c      ****  initializing the hardware, accessing the buffer- are here.
+   7:serial.c      **** 
+   8:serial.c      **** 02 May 2013 - Mike Hord, SparkFun Electronics
+   9:serial.c      **** 
+  10:serial.c      **** This code is released under the Creative Commons Attribution Share-Alike 3.0
+  11:serial.c      ****  license. You are free to reuse, remix, or redistribute it as you see fit,
+  12:serial.c      ****  so long as you provide attribution to SparkFun Electronics.
+  13:serial.c      **** 
+  14:serial.c      **** ***************************************************************************/
+  15:serial.c      **** 
+  16:serial.c      **** 
+  17:serial.c      **** #include <avr/io.h>
+  18:serial.c      **** #include "serial.h"
+  19:serial.c      **** #include "glcdbp.h"
+  20:serial.c      **** 
+  21:serial.c      **** // These variables are defined in glcdbp.c, and are used for the input buffer
+  22:serial.c      **** //   from the serial port. We need to be able to access them here because we'll
+  23:serial.c      **** //   want to abstract popping from the buffer to a function.
+  24:serial.c      **** extern volatile uint8_t   rxRingBuffer[BUF_DEPTH];
+  25:serial.c      **** extern volatile uint16_t  rxRingHead;
+  26:serial.c      **** extern volatile uint16_t  rxRingTail;
+  27:serial.c      **** extern volatile uint8_t   bufferSize;
+  28:serial.c      **** 
+  29:serial.c      **** // Initialize the serial port hardware.
+  30:serial.c      **** void serialInit(uint16_t baudRate)
+  31:serial.c      **** {
+  15               		.loc 1 31 0
+  16               		.cfi_startproc
+  17               	.LVL0:
+  18               	/* prologue: function */
+  19               	/* frame size = 0 */
+  20               	/* stack size = 0 */
+  21               	.L__stack_usage = 0
+  32:serial.c      ****   // Set baud rate 
+  33:serial.c      ****   UBRR0 = baudRate;
+  22               		.loc 1 33 0
+  23 0000 9093 C500 		sts 196+1,r25
+  24 0004 8093 C400 		sts 196,r24
+  34:serial.c      **** 
+  35:serial.c      ****   // Enable receiver and transmitter 
+  36:serial.c      ****   UCSR0A = (1<<U2X0);
+  25               		.loc 1 36 0
+  26 0008 82E0      		ldi r24,lo8(2)
+  27               	.LVL1:
+  28 000a 8093 C000 		sts 192,r24
+  29               	.LVL2:
+  37:serial.c      ****   UCSR0B = (1<<RXCIE0)|(1<<RXEN0)|(1<<TXEN0);  //Enable Interrupts on receive
+  30               		.loc 1 37 0
+  31 000e 88E9      		ldi r24,lo8(-104)
+  32 0010 8093 C100 		sts 193,r24
+  38:serial.c      **** 
+  39:serial.c      ****   UCSR0C = (1<<UCSZ00)|(1<<UCSZ01);
+  33               		.loc 1 39 0
+  34 0014 86E0      		ldi r24,lo8(6)
+  35 0016 8093 C200 		sts 194,r24
+  36 001a 0895      		ret
+  37               		.cfi_endproc
+  38               	.LFE0:
+  40               	.global	putChar
+  42               	putChar:
+  43               	.LFB1:
+  40:serial.c      **** }
+  41:serial.c      **** 
+  42:serial.c      **** // A simple function that waits for the clear to send from the USART, then
+  43:serial.c      **** //  dumps out a data byte. All other serial puts are based on this.
+  44:serial.c      **** void putChar(uint8_t TXData)
+  45:serial.c      **** {
+  44               		.loc 1 45 0
+  45               		.cfi_startproc
+  46               	/* prologue: function */
+  47               	/* frame size = 0 */
+  48               	/* stack size = 0 */
+  49               	.L__stack_usage = 0
+  50               	.LVL3:
+  51               	.L4:
+  46:serial.c      ****   while ( !( UCSR0A & (1<<UDRE0)) );  // Wait for empty transmit buffer
+  52               		.loc 1 46 0 discriminator 1
+  53 001c 9091 C000 		lds r25,192
+  54 0020 95FF      		sbrs r25,5
+  55 0022 00C0      		rjmp .L4
+  47:serial.c      ****   UDR0 = TXData;    // Put data into buffer; uC automatically
+  56               		.loc 1 47 0
+  57 0024 8093 C600 		sts 198,r24
+  58 0028 0895      		ret
+  59               		.cfi_endproc
+  60               	.LFE1:
+  62               	.global	putHex
+  64               	putHex:
+  65               	.LFB2:
+  48:serial.c      ****                     //  sends data once it's written.
+  49:serial.c      **** }
+  50:serial.c      **** 
+  51:serial.c      **** // I probably didn't need to write this, but I did. Converts an 8-bit number
+  52:serial.c      **** //  to two-digit hex and prints it.
+  53:serial.c      **** void putHex(uint8_t TXData)
+  54:serial.c      **** {
+  66               		.loc 1 54 0
+  67               		.cfi_startproc
+  68               	.LVL4:
+  69 002a CF93      		push r28
+  70               	.LCFI0:
+  71               		.cfi_def_cfa_offset 3
+  72               		.cfi_offset 28, -2
+  73               	/* prologue: function */
+  74               	/* frame size = 0 */
+  75               	/* stack size = 1 */
+  76               	.L__stack_usage = 1
+  55:serial.c      ****   uint8_t hexChars[2]; // We'll use an array to buffer the characters.
+  56:serial.c      ****   // First, let's isolate the two halves of the byte in question.
+  57:serial.c      ****   hexChars[0] = (0x0F) & TXData;
+  77               		.loc 1 57 0
+  78 002c C82F      		mov r28,r24
+  79 002e CF70      		andi r28,lo8(15)
+  80               	.LVL5:
+  58:serial.c      ****   hexChars[1] = ((0xF0) & TXData)>>4;
+  81               		.loc 1 58 0
+  82 0030 8295      		swap r24
+  83               	.LVL6:
+  84 0032 8F70      		andi r24,lo8(15)
+  85               	.LVL7:
+  59:serial.c      ****   // Okay, now we can convert them to an ASCII value.
+  60:serial.c      ****   if (hexChars[1] < 10) hexChars[1] += '0';
+  86               		.loc 1 60 0
+  87 0034 8A30      		cpi r24,lo8(10)
+  88 0036 00F4      		brsh .L7
+  89               		.loc 1 60 0 is_stmt 0 discriminator 1
+  90 0038 805D      		subi r24,lo8(-(48))
+  91               	.LVL8:
+  92 003a 00C0      		rjmp .L8
+  93               	.L7:
+  61:serial.c      ****   else hexChars[1] += ('A'-10);
+  94               		.loc 1 61 0 is_stmt 1
+  95 003c 895C      		subi r24,lo8(-(55))
+  96               	.LVL9:
+  97               	.L8:
+  62:serial.c      ****   putChar(hexChars[1]);
+  98               		.loc 1 62 0
+  99 003e 0E94 0000 		call putChar
+ 100               	.LVL10:
+  63:serial.c      ****   if (hexChars[0] < 10) hexChars[0] += '0';
+ 101               		.loc 1 63 0
+ 102 0042 CA30      		cpi r28,lo8(10)
+ 103 0044 00F4      		brsh .L9
+ 104               		.loc 1 63 0 is_stmt 0 discriminator 1
+ 105 0046 80E3      		ldi r24,lo8(48)
+ 106 0048 00C0      		rjmp .L11
+ 107               	.L9:
+  64:serial.c      ****   else hexChars[0] += ('A'-10);
+ 108               		.loc 1 64 0 is_stmt 1
+ 109 004a 87E3      		ldi r24,lo8(55)
+ 110               	.L11:
+ 111 004c 8C0F      		add r24,r28
+ 112               	.LVL11:
+ 113               	/* epilogue start */
+  65:serial.c      ****   putChar(hexChars[0]);
+  66:serial.c      **** }
+ 114               		.loc 1 66 0
+ 115 004e CF91      		pop r28
+  65:serial.c      ****   putChar(hexChars[0]);
+ 116               		.loc 1 65 0
+ 117 0050 0C94 0000 		jmp putChar
+ 118               	.LVL12:
+ 119               		.cfi_endproc
+ 120               	.LFE2:
+ 122               	.global	putDec
+ 124               	putDec:
+ 125               	.LFB3:
+  67:serial.c      **** 
+  68:serial.c      **** // Convert an 8-bit value into a three-digit decimal number and print it.
+  69:serial.c      **** void putDec(uint8_t TXData)
+  70:serial.c      **** {
+ 126               		.loc 1 70 0
+ 127               		.cfi_startproc
+ 128               	.LVL13:
+ 129 0054 0F93      		push r16
+ 130               	.LCFI1:
+ 131               		.cfi_def_cfa_offset 3
+ 132               		.cfi_offset 16, -2
+ 133 0056 1F93      		push r17
+ 134               	.LCFI2:
+ 135               		.cfi_def_cfa_offset 4
+ 136               		.cfi_offset 17, -3
+ 137 0058 CF93      		push r28
+ 138               	.LCFI3:
+ 139               		.cfi_def_cfa_offset 5
+ 140               		.cfi_offset 28, -4
+ 141 005a DF93      		push r29
+ 142               	.LCFI4:
+ 143               		.cfi_def_cfa_offset 6
+ 144               		.cfi_offset 29, -5
+ 145 005c 1F92      		push __zero_reg__
+ 146               	.LCFI5:
+ 147               		.cfi_def_cfa_offset 7
+ 148 005e CDB7      		in r28,__SP_L__
+ 149 0060 DEB7      		in r29,__SP_H__
+ 150               	.LCFI6:
+ 151               		.cfi_def_cfa_register 28
+ 152               	/* prologue: function */
+ 153               	/* frame size = 1 */
+ 154               	/* stack size = 5 */
+ 155               	.L__stack_usage = 5
+ 156 0062 282F      		mov r18,r24
+  71:serial.c      ****   uint8_t ones = TXData % 10;
+ 157               		.loc 1 71 0
+ 158 0064 0AE0      		ldi r16,lo8(10)
+ 159 0066 602F      		mov r22,r16
+ 160 0068 0E94 0000 		call __udivmodqi4
+ 161               	.LVL14:
+ 162 006c 192F      		mov r17,r25
+ 163               	.LVL15:
+  72:serial.c      ****   TXData -= ones;
+ 164               		.loc 1 72 0
+ 165 006e 822F      		mov r24,r18
+ 166 0070 891B      		sub r24,r25
+ 167               	.LVL16:
+  73:serial.c      ****   uint8_t tens = (TXData % 100)/10;
+  74:serial.c      ****   uint8_t huns = TXData / 100;
+ 168               		.loc 1 74 0
+ 169 0072 64E6      		ldi r22,lo8(100)
+ 170 0074 0E94 0000 		call __udivmodqi4
+ 171               	.LVL17:
+  75:serial.c      ****   putChar((huns) + '0');
+ 172               		.loc 1 75 0
+ 173 0078 805D      		subi r24,lo8(-(48))
+ 174               	.LVL18:
+ 175 007a 9983      		std Y+1,r25
+ 176 007c 0E94 0000 		call putChar
+ 177               	.LVL19:
+  73:serial.c      ****   uint8_t tens = (TXData % 100)/10;
+ 178               		.loc 1 73 0
+ 179 0080 9981      		ldd r25,Y+1
+ 180 0082 892F      		mov r24,r25
+ 181 0084 602F      		mov r22,r16
+ 182 0086 0E94 0000 		call __udivmodqi4
+  76:serial.c      ****   putChar((tens) + '0');
+ 183               		.loc 1 76 0
+ 184 008a 805D      		subi r24,lo8(-(48))
+ 185 008c 0E94 0000 		call putChar
+ 186               	.LVL20:
+  77:serial.c      ****   putChar((ones) + '0');
+ 187               		.loc 1 77 0
+ 188 0090 80E3      		ldi r24,lo8(48)
+ 189 0092 810F      		add r24,r17
+ 190               	/* epilogue start */
+  78:serial.c      **** }
+ 191               		.loc 1 78 0
+ 192 0094 0F90      		pop __tmp_reg__
+ 193 0096 DF91      		pop r29
+ 194 0098 CF91      		pop r28
+ 195 009a 1F91      		pop r17
+ 196               	.LVL21:
+ 197 009c 0F91      		pop r16
+ 198               	.LVL22:
+  77:serial.c      ****   putChar((ones) + '0');
+ 199               		.loc 1 77 0
+ 200 009e 0C94 0000 		jmp putChar
+ 201               	.LVL23:
+ 202               		.cfi_endproc
+ 203               	.LFE3:
+ 205               	.global	putBin
+ 207               	putBin:
+ 208               	.LFB4:
+  79:serial.c      **** 
+  80:serial.c      **** // Convert an 8-bit value into an 8-bit binary number and print it.
+  81:serial.c      **** void putBin(uint8_t TXData)
+  82:serial.c      **** {
+ 209               		.loc 1 82 0
+ 210               		.cfi_startproc
+ 211               	.LVL24:
+ 212 00a2 CF93      		push r28
+ 213               	.LCFI7:
+ 214               		.cfi_def_cfa_offset 3
+ 215               		.cfi_offset 28, -2
+ 216 00a4 DF93      		push r29
+ 217               	.LCFI8:
+ 218               		.cfi_def_cfa_offset 4
+ 219               		.cfi_offset 29, -3
+ 220               	/* prologue: function */
+ 221               	/* frame size = 0 */
+ 222               	/* stack size = 2 */
+ 223               	.L__stack_usage = 2
+ 224 00a6 D82F      		mov r29,r24
+ 225               	.LVL25:
+ 226               		.loc 1 82 0
+ 227 00a8 C8E0      		ldi r28,lo8(8)
+ 228               	.LVL26:
+ 229               	.L17:
+ 230               	.LBB2:
+  83:serial.c      ****   for (char i = 0; i < 8; i++)
+  84:serial.c      ****   {
+  85:serial.c      ****     if ((TXData & 0x01) == 0x01) putChar('1');
+ 231               		.loc 1 85 0
+ 232 00aa D0FF      		sbrs r29,0
+ 233 00ac 00C0      		rjmp .L14
+ 234               		.loc 1 85 0 is_stmt 0 discriminator 1
+ 235 00ae 81E3      		ldi r24,lo8(49)
+ 236 00b0 00C0      		rjmp .L18
+ 237               	.L14:
+  86:serial.c      ****     else putChar('0');
+ 238               		.loc 1 86 0 is_stmt 1
+ 239 00b2 80E3      		ldi r24,lo8(48)
+ 240               	.L18:
+ 241 00b4 0E94 0000 		call putChar
+ 242               	.LVL27:
+  87:serial.c      ****     TXData = TXData>>1;
+ 243               		.loc 1 87 0
+ 244 00b8 D695      		lsr r29
+ 245               	.LVL28:
+ 246 00ba C150      		subi r28,lo8(-(-1))
+ 247               	.LVL29:
+  83:serial.c      ****   for (char i = 0; i < 8; i++)
+ 248               		.loc 1 83 0
+ 249 00bc 01F4      		brne .L17
+ 250               	/* epilogue start */
+ 251               	.LBE2:
+  88:serial.c      ****   }
+  89:serial.c      **** }
+ 252               		.loc 1 89 0
+ 253 00be DF91      		pop r29
+ 254               	.LVL30:
+ 255 00c0 CF91      		pop r28
+ 256               	.LVL31:
+ 257 00c2 0895      		ret
+ 258               		.cfi_endproc
+ 259               	.LFE4:
+ 261               	.global	putLine
+ 263               	putLine:
+ 264               	.LFB5:
+  90:serial.c      **** 
+  91:serial.c      **** // Print a string, followed by carriage return and new line.
+  92:serial.c      **** void putLine(char *TXData)
+  93:serial.c      **** {
+ 265               		.loc 1 93 0
+ 266               		.cfi_startproc
+ 267               	.LVL32:
+ 268 00c4 CF93      		push r28
+ 269               	.LCFI9:
+ 270               		.cfi_def_cfa_offset 3
+ 271               		.cfi_offset 28, -2
+ 272 00c6 DF93      		push r29
+ 273               	.LCFI10:
+ 274               		.cfi_def_cfa_offset 4
+ 275               		.cfi_offset 29, -3
+ 276               	/* prologue: function */
+ 277               	/* frame size = 0 */
+ 278               	/* stack size = 2 */
+ 279               	.L__stack_usage = 2
+ 280 00c8 EC01      		movw r28,r24
+ 281               	.LVL33:
+ 282               	.L20:
+  94:serial.c      ****   while (*TXData != '\0')
+ 283               		.loc 1 94 0 discriminator 1
+ 284 00ca 8991      		ld r24,Y+
+ 285               	.LVL34:
+ 286 00cc 8823      		tst r24
+ 287 00ce 01F0      		breq .L22
+ 288               	.LVL35:
+  95:serial.c      ****   {
+  96:serial.c      ****     putChar(*(TXData++));
+ 289               		.loc 1 96 0
+ 290 00d0 0E94 0000 		call putChar
+ 291               	.LVL36:
+ 292 00d4 00C0      		rjmp .L20
+ 293               	.LVL37:
+ 294               	.L22:
+  97:serial.c      ****   }
+  98:serial.c      ****   putChar('\n');
+ 295               		.loc 1 98 0
+ 296 00d6 8AE0      		ldi r24,lo8(10)
+ 297 00d8 0E94 0000 		call putChar
+ 298               	.LVL38:
+  99:serial.c      ****   putChar('\r');
+ 299               		.loc 1 99 0
+ 300 00dc 8DE0      		ldi r24,lo8(13)
+ 301               	/* epilogue start */
+ 100:serial.c      **** }
+ 302               		.loc 1 100 0
+ 303 00de DF91      		pop r29
+ 304 00e0 CF91      		pop r28
+ 305               	.LVL39:
+  99:serial.c      ****   putChar('\r');
+ 306               		.loc 1 99 0
+ 307 00e2 0C94 0000 		jmp putChar
+ 308               	.LVL40:
+ 309               		.cfi_endproc
+ 310               	.LFE5:
+ 312               	.global	serialBufferPop
+ 314               	serialBufferPop:
+ 315               	.LFB6:
+ 101:serial.c      **** 
+ 102:serial.c      **** // Grab the top byte off the serial FIFO and return it, adjusting the pointers
+ 103:serial.c      **** //  and size of the FIFO accordingly.
+ 104:serial.c      **** char serialBufferPop(void)
+ 105:serial.c      **** {
+ 316               		.loc 1 105 0
+ 317               		.cfi_startproc
+ 318               	/* prologue: function */
+ 319               	/* frame size = 0 */
+ 320               	/* stack size = 0 */
+ 321               	.L__stack_usage = 0
+ 106:serial.c      ****   bufferSize--;
+ 322               		.loc 1 106 0
+ 323 00e6 8091 0000 		lds r24,bufferSize
+ 324 00ea 8150      		subi r24,lo8(-(-1))
+ 325 00ec 8093 0000 		sts bufferSize,r24
+ 107:serial.c      ****   char retVal = rxRingBuffer[rxRingTail++];
+ 326               		.loc 1 107 0
+ 327 00f0 8091 0000 		lds r24,rxRingTail
+ 328 00f4 9091 0000 		lds r25,rxRingTail+1
+ 329 00f8 9C01      		movw r18,r24
+ 330 00fa 2F5F      		subi r18,-1
+ 331 00fc 3F4F      		sbci r19,-1
+ 332 00fe 3093 0000 		sts rxRingTail+1,r19
+ 333 0102 2093 0000 		sts rxRingTail,r18
+ 334 0106 FC01      		movw r30,r24
+ 335 0108 E050      		subi r30,lo8(-(rxRingBuffer))
+ 336 010a F040      		sbci r31,hi8(-(rxRingBuffer))
+ 337 010c 8081      		ld r24,Z
+ 338               	.LVL41:
+ 108:serial.c      ****   if (rxRingTail == BUF_DEPTH) rxRingTail = 0;
+ 339               		.loc 1 108 0
+ 340 010e 2091 0000 		lds r18,rxRingTail
+ 341 0112 3091 0000 		lds r19,rxRingTail+1
+ 342 0116 2115      		cp r18,__zero_reg__
+ 343 0118 3140      		sbci r19,1
+ 344 011a 01F4      		brne .L24
+ 345               		.loc 1 108 0 is_stmt 0 discriminator 1
+ 346 011c 1092 0000 		sts rxRingTail+1,__zero_reg__
+ 347 0120 1092 0000 		sts rxRingTail,__zero_reg__
+ 348               	.L24:
+ 109:serial.c      ****   return retVal;
+ 110:serial.c      **** }
+ 349               		.loc 1 110 0 is_stmt 1
+ 350 0124 0895      		ret
+ 351               		.cfi_endproc
+ 352               	.LFE6:
+ 354               	.global	clearBuffer
+ 356               	clearBuffer:
+ 357               	.LFB7:
+ 111:serial.c      **** 
+ 112:serial.c      **** // Clear the FIFO buffer. Note that this doesn't actually delete the info in
+ 113:serial.c      **** //  the buffer, it just resets the size and the pointers.
+ 114:serial.c      **** void clearBuffer(void)
+ 115:serial.c      **** {
+ 358               		.loc 1 115 0
+ 359               		.cfi_startproc
+ 360               	/* prologue: function */
+ 361               	/* frame size = 0 */
+ 362               	/* stack size = 0 */
+ 363               	.L__stack_usage = 0
+ 116:serial.c      ****   bufferSize = 0;
+ 364               		.loc 1 116 0
+ 365 0126 1092 0000 		sts bufferSize,__zero_reg__
+ 117:serial.c      ****   rxRingTail = 0;
+ 366               		.loc 1 117 0
+ 367 012a 1092 0000 		sts rxRingTail+1,__zero_reg__
+ 368 012e 1092 0000 		sts rxRingTail,__zero_reg__
+ 118:serial.c      ****   rxRingHead = 0;
+ 369               		.loc 1 118 0
+ 370 0132 1092 0000 		sts rxRingHead+1,__zero_reg__
+ 371 0136 1092 0000 		sts rxRingHead,__zero_reg__
+ 372 013a 0895      		ret
+ 373               		.cfi_endproc
+ 374               	.LFE7:
+ 376               	.Letext0:
+ 377               		.file 2 "/usr/lib/avr/include/stdint.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 serial.c
+     /tmp/ccXlC8WH.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccXlC8WH.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccXlC8WH.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccXlC8WH.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccXlC8WH.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccXlC8WH.s:12     .text:0000000000000000 serialInit
+     /tmp/ccXlC8WH.s:42     .text:000000000000001c putChar
+     /tmp/ccXlC8WH.s:64     .text:000000000000002a putHex
+     /tmp/ccXlC8WH.s:124    .text:0000000000000054 putDec
+     /tmp/ccXlC8WH.s:207    .text:00000000000000a2 putBin
+     /tmp/ccXlC8WH.s:263    .text:00000000000000c4 putLine
+     /tmp/ccXlC8WH.s:314    .text:00000000000000e6 serialBufferPop
+     /tmp/ccXlC8WH.s:356    .text:0000000000000126 clearBuffer
+
+UNDEFINED SYMBOLS
+__udivmodqi4
+bufferSize
+rxRingTail
+rxRingBuffer
+rxRingHead

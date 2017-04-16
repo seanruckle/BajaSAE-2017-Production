@@ -1,0 +1,4 @@
+unsigned char,speed
+unsigned char,temp
+int,cowbell
+long int,moreCowbell

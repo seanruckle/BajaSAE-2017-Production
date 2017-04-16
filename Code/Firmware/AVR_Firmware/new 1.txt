@@ -1,0 +1,1 @@
+"D:\Program Files\WinAVR-20100110\bin\avrdude.exe" -c usbtiny -p atmega168 -v -v -v -U flash:w:"gLCD_ser_bp_baja.hex":i

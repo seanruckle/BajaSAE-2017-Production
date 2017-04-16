@@ -1,0 +1,779 @@
+Archive member included because of file (symbol)
+
+d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_udivmodqi4.o)
+                              serial.o (__udivmodqi4)
+d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_exit.o)
+                              d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o (exit)
+d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_copy_data.o)
+                              lcd.o (__do_copy_data)
+d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_clear_bss.o)
+                              glcdbp.o (__do_clear_bss)
+d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eerd_byte_atmega168.o)
+                              nvm.o (__eerd_byte_m168)
+d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eewr_byte_atmega168.o)
+                              nvm.o (__eewr_byte_m168)
+
+Allocating common symbols
+Common symbol       size              file
+
+rxRingBuffer        0x100             glcdbp.o
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+text             0x00000000         0x00020000         xr
+data             0x00800060         0x0000ffa0         rw !x
+eeprom           0x00810000         0x00010000         rw !x
+fuse             0x00820000         0x00000400         rw !x
+lock             0x00830000         0x00000400         rw !x
+signature        0x00840000         0x00000400         rw !x
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+Address of section .data set to 0x800100
+LOAD d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+LOAD glcdbp.o
+LOAD t6963.o
+LOAD serial.o
+LOAD interrupts.o
+LOAD ks0108b.o
+LOAD lcd.o
+LOAD io_support.o
+LOAD ui.o
+LOAD nvm.o
+LOAD d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libm.a
+LOAD d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a
+LOAD d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a
+LOAD d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a
+
+.hash
+ *(.hash)
+
+.dynsym
+ *(.dynsym)
+
+.dynstr
+ *(.dynstr)
+
+.gnu.version
+ *(.gnu.version)
+
+.gnu.version_d
+ *(.gnu.version_d)
+
+.gnu.version_r
+ *(.gnu.version_r)
+
+.rel.init
+ *(.rel.init)
+
+.rela.init
+ *(.rela.init)
+
+.rel.text
+ *(.rel.text)
+ *(.rel.text.*)
+ *(.rel.gnu.linkonce.t*)
+
+.rela.text
+ *(.rela.text)
+ *(.rela.text.*)
+ *(.rela.gnu.linkonce.t*)
+
+.rel.fini
+ *(.rel.fini)
+
+.rela.fini
+ *(.rela.fini)
+
+.rel.rodata
+ *(.rel.rodata)
+ *(.rel.rodata.*)
+ *(.rel.gnu.linkonce.r*)
+
+.rela.rodata
+ *(.rela.rodata)
+ *(.rela.rodata.*)
+ *(.rela.gnu.linkonce.r*)
+
+.rel.data
+ *(.rel.data)
+ *(.rel.data.*)
+ *(.rel.gnu.linkonce.d*)
+
+.rela.data
+ *(.rela.data)
+ *(.rela.data.*)
+ *(.rela.gnu.linkonce.d*)
+
+.rel.ctors
+ *(.rel.ctors)
+
+.rela.ctors
+ *(.rela.ctors)
+
+.rel.dtors
+ *(.rel.dtors)
+
+.rela.dtors
+ *(.rela.dtors)
+
+.rel.got
+ *(.rel.got)
+
+.rela.got
+ *(.rela.got)
+
+.rel.bss
+ *(.rel.bss)
+
+.rela.bss
+ *(.rela.bss)
+
+.rel.plt
+ *(.rel.plt)
+
+.rela.plt
+ *(.rela.plt)
+
+.text           0x00000000     0x2712
+ *(.vectors)
+ .vectors       0x00000000       0x68 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+                0x00000000                __vectors
+                0x00000000                __vector_default
+ *(.vectors)
+ *(.progmem.gcc*)
+ *(.progmem*)
+ .progmem.data  0x00000068      0xeef lcd.o
+                0x00000f58                . = ALIGN (0x2)
+ *fill*         0x00000f57        0x1 00
+                0x00000f58                __trampolines_start = .
+ *(.trampolines)
+ .trampolines   0x00000f58        0x0 linker stubs
+ *(.trampolines*)
+                0x00000f58                __trampolines_end = .
+ *(.jumptables)
+ *(.jumptables*)
+ *(.lowtext)
+ *(.lowtext*)
+                0x00000f58                __ctors_start = .
+ *(.ctors)
+                0x00000f58                __ctors_end = .
+                0x00000f58                __dtors_start = .
+ *(.dtors)
+                0x00000f58                __dtors_end = .
+ SORT(*)(.ctors)
+ SORT(*)(.dtors)
+ *(.init0)
+ .init0         0x00000f58        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+                0x00000f58                __init
+ *(.init0)
+ *(.init1)
+ *(.init1)
+ *(.init2)
+ .init2         0x00000f58        0xc d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+ *(.init2)
+ *(.init3)
+ *(.init3)
+ *(.init4)
+ .init4         0x00000f64       0x16 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_copy_data.o)
+                0x00000f64                __do_copy_data
+ .init4         0x00000f7a       0x10 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_clear_bss.o)
+                0x00000f7a                __do_clear_bss
+ *(.init4)
+ *(.init5)
+ *(.init5)
+ *(.init6)
+ *(.init6)
+ *(.init7)
+ *(.init7)
+ *(.init8)
+ *(.init8)
+ *(.init9)
+ .init9         0x00000f8a        0x8 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+ *(.init9)
+ *(.text)
+ .text          0x00000f92        0x4 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+                0x00000f92                __vector_22
+                0x00000f92                __vector_1
+                0x00000f92                __vector_24
+                0x00000f92                __vector_12
+                0x00000f92                __bad_interrupt
+                0x00000f92                __vector_6
+                0x00000f92                __vector_3
+                0x00000f92                __vector_23
+                0x00000f92                __vector_25
+                0x00000f92                __vector_11
+                0x00000f92                __vector_13
+                0x00000f92                __vector_17
+                0x00000f92                __vector_19
+                0x00000f92                __vector_7
+                0x00000f92                __vector_5
+                0x00000f92                __vector_4
+                0x00000f92                __vector_9
+                0x00000f92                __vector_2
+                0x00000f92                __vector_21
+                0x00000f92                __vector_15
+                0x00000f92                __vector_8
+                0x00000f92                __vector_14
+                0x00000f92                __vector_10
+                0x00000f92                __vector_16
+                0x00000f92                __vector_20
+ .text          0x00000f96      0x118 glcdbp.o
+                0x00000f96                timerInit
+                0x00000fbe                main
+ .text          0x000010ae      0x2aa t6963.o
+                0x000011ca                t6963ReadBlock
+                0x0000116a                t6963DisplayInit
+                0x0000119c                t6963SetPointer
+                0x000012ea                t6963DrawPixel
+                0x00001102                t6963WriteCmd
+                0x000010cc                t6963BusyWait
+                0x0000113c                t6963WriteData
+                0x00001320                t6963Clear
+                0x00001132                t6963BitSR
+                0x000010ae                t6963ReadStatus
+                0x000010dc                t6963ReadData
+ .text          0x00001358      0x172 serial.o
+                0x00001476                serialBufferPop
+                0x00001440                putLine
+                0x000013be                putDec
+                0x00001358                serialInit
+                0x000014b4                clearBuffer
+                0x00001374                putChar
+                0x00001384                putHex
+                0x0000140e                putBin
+ .text          0x000014ca       0x66 interrupts.o
+                0x000014ca                __vector_18
+ .text          0x00001530      0x2d8 ks0108b.o
+                0x000016a0                ks0108bSetColumn
+                0x00001780                ks0108bClear
+                0x00001572                setPinsDefault
+                0x0000155a                strobeEN
+                0x00001530                ks0108bReset
+                0x000017ea                ks0108bDisplayOn
+                0x0000170a                ks0108bDrawPixel
+                0x000016c4                ks0108bWriteData
+                0x0000157c                ks0108bReadData
+                0x000017cc                ks0108bSetStartLine
+                0x000015de                ks0108bReadBlock
+                0x000015be                ks0108bSetPage
+ .text          0x00001808      0xab8 lcd.o
+                0x00001a1e                lcdDrawSprite
+                0x00001822                lcdDrawPixel
+                0x00001c68                lcdDrawChar
+                0x00002264                lcdClearScreen
+                0x00001eae                lcdDrawCircle
+                0x00002290                lcdConfig
+                0x00001808                lcdGetDataBlock
+                0x00001fd6                lcdDrawLine
+                0x00002218                lcdDrawBox
+                0x0000190c                lcdDrawLogo
+                0x000019d2                lcdEraseBlock
+                0x00001860                lcdDrawBig
+ .text          0x000022c0       0x78 io_support.o
+                0x000022e6                setData
+                0x0000232a                hiZDataPins
+                0x00002312                readData
+                0x000022c0                ioInit
+ .text          0x00002338      0x31c ui.o
+                0x00002338                uiStateMachine
+ .text          0x00002654       0x76 nvm.o
+                0x000026b4                toggleSplash
+                0x0000268a                setBaudRate
+                0x0000265e                getBaudRate
+                0x0000269c                toggleReverse
+                0x0000267e                setBacklightLevel
+                0x00002654                getBacklightLevel
+                0x00002668                getReverse
+                0x00002674                getSplash
+ .text          0x000026ca        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_udivmodqi4.o)
+ .text          0x000026ca        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_exit.o)
+ .text          0x000026ca        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_copy_data.o)
+ .text          0x000026ca        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_clear_bss.o)
+ .text          0x000026ca        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eerd_byte_atmega168.o)
+ .text          0x000026ca        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eewr_byte_atmega168.o)
+                0x000026ca                . = ALIGN (0x2)
+ *(.text.*)
+ .text.libgcc   0x000026ca       0x18 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_udivmodqi4.o)
+                0x000026ca                __udivmodqi4
+ .text.libgcc   0x000026e2        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_exit.o)
+ .text.libgcc   0x000026e2        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_copy_data.o)
+ .text.libgcc   0x000026e2        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_clear_bss.o)
+ .text.avr-libc
+                0x000026e2       0x10 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eerd_byte_atmega168.o)
+                0x000026e2                __eerd_byte_m168
+ .text.avr-libc
+                0x000026f2       0x1c d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eewr_byte_atmega168.o)
+                0x000026f4                __eewr_r18_m168
+                0x000026f2                __eewr_byte_m168
+                0x0000270e                . = ALIGN (0x2)
+ *(.fini9)
+ .fini9         0x0000270e        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_exit.o)
+                0x0000270e                exit
+                0x0000270e                _exit
+ *(.fini9)
+ *(.fini8)
+ *(.fini8)
+ *(.fini7)
+ *(.fini7)
+ *(.fini6)
+ *(.fini6)
+ *(.fini5)
+ *(.fini5)
+ *(.fini4)
+ *(.fini4)
+ *(.fini3)
+ *(.fini3)
+ *(.fini2)
+ *(.fini2)
+ *(.fini1)
+ *(.fini1)
+ *(.fini0)
+ .fini0         0x0000270e        0x4 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_exit.o)
+ *(.fini0)
+                0x00002712                _etext = .
+
+.data           0x00800100        0x2 load address 0x00002712
+                0x00800100                PROVIDE (__data_start, .)
+ *(.data)
+ .data          0x00800100        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+ .data          0x00800100        0x0 glcdbp.o
+ .data          0x00800100        0x0 t6963.o
+ .data          0x00800100        0x0 serial.o
+ .data          0x00800100        0x0 interrupts.o
+ .data          0x00800100        0x0 ks0108b.o
+ .data          0x00800100        0x2 lcd.o
+                0x00800101                yDim
+                0x00800100                xDim
+ .data          0x00800102        0x0 io_support.o
+ .data          0x00800102        0x0 ui.o
+ .data          0x00800102        0x0 nvm.o
+ .data          0x00800102        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_udivmodqi4.o)
+ .data          0x00800102        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_exit.o)
+ .data          0x00800102        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_copy_data.o)
+ .data          0x00800102        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_clear_bss.o)
+ .data          0x00800102        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eerd_byte_atmega168.o)
+ .data          0x00800102        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eewr_byte_atmega168.o)
+ *(.data*)
+ *(.rodata)
+ *(.rodata*)
+ *(.gnu.linkonce.d*)
+                0x00800102                . = ALIGN (0x2)
+                0x00800102                _edata = .
+                0x00800102                PROVIDE (__data_end, .)
+
+.bss            0x00800102      0x10e
+                0x00800102                PROVIDE (__bss_start, .)
+ *(.bss)
+ .bss           0x00800102        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+ .bss           0x00800102        0x7 glcdbp.o
+                0x00800108                reverse
+                0x00800104                rxRingHead
+                0x00800102                display
+                0x00800103                bufferSize
+                0x00800106                rxRingTail
+ .bss           0x00800109        0x0 t6963.o
+ .bss           0x00800109        0x0 serial.o
+ .bss           0x00800109        0x0 interrupts.o
+ .bss           0x00800109        0x1 ks0108b.o
+                0x00800109                column
+ .bss           0x0080010a        0x6 lcd.o
+                0x0080010e                textLength
+                0x0080010c                textOrigin
+                0x0080010a                cursorPos
+ .bss           0x00800110        0x0 io_support.o
+ .bss           0x00800110        0x0 ui.o
+ .bss           0x00800110        0x0 nvm.o
+ .bss           0x00800110        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_udivmodqi4.o)
+ .bss           0x00800110        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_exit.o)
+ .bss           0x00800110        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_copy_data.o)
+ .bss           0x00800110        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_clear_bss.o)
+ .bss           0x00800110        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eerd_byte_atmega168.o)
+ .bss           0x00800110        0x0 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eewr_byte_atmega168.o)
+ *(.bss*)
+ *(COMMON)
+ COMMON         0x00800110      0x100 glcdbp.o
+                0x00800110                rxRingBuffer
+                0x00800210                PROVIDE (__bss_end, .)
+                0x00002712                __data_load_start = LOADADDR (.data)
+                0x00002714                __data_load_end = (__data_load_start + SIZEOF (.data))
+
+.noinit         0x00800210        0x0
+                0x00800210                PROVIDE (__noinit_start, .)
+ *(.noinit*)
+                0x00800210                PROVIDE (__noinit_end, .)
+                0x00800210                _end = .
+                0x00800210                PROVIDE (__heap_start, .)
+
+.eeprom         0x00810000        0x0
+ *(.eeprom*)
+                0x00810000                __eeprom_end = .
+
+.fuse
+ *(.fuse)
+ *(.lfuse)
+ *(.hfuse)
+ *(.efuse)
+
+.lock
+ *(.lock*)
+
+.signature
+ *(.signature*)
+
+.stab
+ *(.stab)
+
+.stabstr
+ *(.stabstr)
+
+.stab.excl
+ *(.stab.excl)
+
+.stab.exclstr
+ *(.stab.exclstr)
+
+.stab.index
+ *(.stab.index)
+
+.stab.indexstr
+ *(.stab.indexstr)
+
+.comment
+ *(.comment)
+
+.debug
+ *(.debug)
+
+.line
+ *(.line)
+
+.debug_srcinfo
+ *(.debug_srcinfo)
+
+.debug_sfnames
+ *(.debug_sfnames)
+
+.debug_aranges  0x00000000      0x120
+ *(.debug_aranges)
+ .debug_aranges
+                0x00000000       0x20 glcdbp.o
+ .debug_aranges
+                0x00000020       0x20 t6963.o
+ .debug_aranges
+                0x00000040       0x20 serial.o
+ .debug_aranges
+                0x00000060       0x20 interrupts.o
+ .debug_aranges
+                0x00000080       0x20 ks0108b.o
+ .debug_aranges
+                0x000000a0       0x20 lcd.o
+ .debug_aranges
+                0x000000c0       0x20 io_support.o
+ .debug_aranges
+                0x000000e0       0x20 ui.o
+ .debug_aranges
+                0x00000100       0x20 nvm.o
+
+.debug_pubnames
+                0x00000000      0x525
+ *(.debug_pubnames)
+ .debug_pubnames
+                0x00000000       0x7f glcdbp.o
+ .debug_pubnames
+                0x0000007f       0xdc t6963.o
+ .debug_pubnames
+                0x0000015b       0x7e serial.o
+ .debug_pubnames
+                0x000001d9       0x22 interrupts.o
+ .debug_pubnames
+                0x000001fb      0x107 ks0108b.o
+ .debug_pubnames
+                0x00000302      0x11a lcd.o
+ .debug_pubnames
+                0x0000041c       0x46 io_support.o
+ .debug_pubnames
+                0x00000462       0x25 ui.o
+ .debug_pubnames
+                0x00000487       0x9e nvm.o
+
+.debug_info     0x00000000     0x2290
+ *(.debug_info)
+ .debug_info    0x00000000      0x365 glcdbp.o
+ .debug_info    0x00000365      0x5e2 t6963.o
+ .debug_info    0x00000947      0x33c serial.o
+ .debug_info    0x00000c83       0xd1 interrupts.o
+ .debug_info    0x00000d54      0x729 ks0108b.o
+ .debug_info    0x0000147d      0x979 lcd.o
+ .debug_info    0x00001df6      0x105 io_support.o
+ .debug_info    0x00001efb      0x231 ui.o
+ .debug_info    0x0000212c      0x164 nvm.o
+ *(.gnu.linkonce.wi.*)
+
+.debug_abbrev   0x00000000      0xb9b
+ *(.debug_abbrev)
+ .debug_abbrev  0x00000000      0x161 glcdbp.o
+ .debug_abbrev  0x00000161      0x1db t6963.o
+ .debug_abbrev  0x0000033c      0x185 serial.o
+ .debug_abbrev  0x000004c1       0x7f interrupts.o
+ .debug_abbrev  0x00000540      0x23a ks0108b.o
+ .debug_abbrev  0x0000077a      0x1cc lcd.o
+ .debug_abbrev  0x00000946       0xc1 io_support.o
+ .debug_abbrev  0x00000a07       0xfe ui.o
+ .debug_abbrev  0x00000b05       0x96 nvm.o
+
+.debug_line     0x00000000     0x1cf0
+ *(.debug_line)
+ .debug_line    0x00000000      0x273 glcdbp.o
+ .debug_line    0x00000273      0x453 t6963.o
+ .debug_line    0x000006c6      0x2af serial.o
+ .debug_line    0x00000975       0xbd interrupts.o
+ .debug_line    0x00000a32      0x51a ks0108b.o
+ .debug_line    0x00000f4c      0x7bd lcd.o
+ .debug_line    0x00001709      0x181 io_support.o
+ .debug_line    0x0000188a      0x2fc ui.o
+ .debug_line    0x00001b86      0x16a nvm.o
+
+.debug_frame    0x00000000      0x440
+ *(.debug_frame)
+ .debug_frame   0x00000000       0x30 glcdbp.o
+ .debug_frame   0x00000030       0xc0 t6963.o
+ .debug_frame   0x000000f0       0x90 serial.o
+ .debug_frame   0x00000180       0x20 interrupts.o
+ .debug_frame   0x000001a0       0xd0 ks0108b.o
+ .debug_frame   0x00000270       0xd0 lcd.o
+ .debug_frame   0x00000340       0x50 io_support.o
+ .debug_frame   0x00000390       0x20 ui.o
+ .debug_frame   0x000003b0       0x90 nvm.o
+
+.debug_str      0x00000000      0x6dd
+ *(.debug_str)
+ .debug_str     0x00000000      0x1db glcdbp.o
+                                0x214 (size before relaxing)
+ .debug_str     0x000001db      0x111 t6963.o
+                                0x244 (size before relaxing)
+ .debug_str     0x000002ec       0x84 serial.o
+                                0x18b (size before relaxing)
+ .debug_str     0x00000370       0x19 interrupts.o
+                                0x110 (size before relaxing)
+ .debug_str     0x00000389      0x119 ks0108b.o
+                                0x2a6 (size before relaxing)
+ .debug_str     0x000004a2      0x156 lcd.o
+                                0x2b0 (size before relaxing)
+ .debug_str     0x000005f8       0x31 io_support.o
+                                0x122 (size before relaxing)
+ .debug_str     0x00000629       0x2b ui.o
+                                0x1c1 (size before relaxing)
+ .debug_str     0x00000654       0x89 nvm.o
+                                0x159 (size before relaxing)
+
+.debug_loc      0x00000000     0x1516
+ *(.debug_loc)
+ .debug_loc     0x00000000       0xa8 glcdbp.o
+ .debug_loc     0x000000a8      0x261 t6963.o
+ .debug_loc     0x00000309       0xd6 serial.o
+ .debug_loc     0x000003df      0x28b ks0108b.o
+ .debug_loc     0x0000066a      0xd58 lcd.o
+ .debug_loc     0x000013c2      0x10d ui.o
+ .debug_loc     0x000014cf       0x47 nvm.o
+
+.debug_macinfo
+ *(.debug_macinfo)
+OUTPUT(gLCD_ser_bp_baja.elf elf32-avr)
+LOAD linker stubs
+
+.debug_ranges   0x00000000      0x120
+ .debug_ranges  0x00000000       0x18 t6963.o
+ .debug_ranges  0x00000018       0x90 serial.o
+ .debug_ranges  0x000000a8       0x78 lcd.o
+
+Cross Reference Table
+
+Symbol                                            File
+__bad_interrupt                                   d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__bss_end                                         d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_clear_bss.o)
+__bss_start                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_clear_bss.o)
+__data_end                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_copy_data.o)
+__data_load_start                                 d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_copy_data.o)
+__data_start                                      d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_copy_data.o)
+__do_clear_bss                                    d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_clear_bss.o)
+                                                  lcd.o
+                                                  ks0108b.o
+                                                  glcdbp.o
+__do_copy_data                                    d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_copy_data.o)
+                                                  lcd.o
+__eerd_byte_m168                                  d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eerd_byte_atmega168.o)
+                                                  nvm.o
+__eewr_byte_m168                                  d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eewr_byte_atmega168.o)
+                                                  nvm.o
+__eewr_r18_m168                                   d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5\libc.a(eewr_byte_atmega168.o)
+__heap_end                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__init                                            d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__stack                                           d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__udivmodqi4                                      d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_udivmodqi4.o)
+                                                  serial.o
+__vector_1                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_10                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_11                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_12                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_13                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_14                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_15                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_16                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_17                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_18                                       interrupts.o
+                                                  d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_19                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_2                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_20                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_21                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_22                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_23                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_24                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_25                                       d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_3                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_4                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_5                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_6                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_7                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_8                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_9                                        d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vector_default                                  d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+__vectors                                         d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+_exit                                             d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_exit.o)
+bufferSize                                        glcdbp.o
+                                                  ui.o
+                                                  interrupts.o
+                                                  serial.o
+clearBuffer                                       serial.o
+                                                  glcdbp.o
+column                                            ks0108b.o
+cursorPos                                         lcd.o
+                                                  ui.o
+display                                           glcdbp.o
+                                                  io_support.o
+                                                  lcd.o
+exit                                              d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/avr5\libgcc.a(_exit.o)
+                                                  d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+getBacklightLevel                                 nvm.o
+                                                  glcdbp.o
+getBaudRate                                       nvm.o
+                                                  glcdbp.o
+getReverse                                        nvm.o
+                                                  glcdbp.o
+getSplash                                         nvm.o
+                                                  glcdbp.o
+hiZDataPins                                       io_support.o
+                                                  ks0108b.o
+ioInit                                            io_support.o
+                                                  glcdbp.o
+ks0108bClear                                      ks0108b.o
+                                                  lcd.o
+ks0108bDisplayOn                                  ks0108b.o
+                                                  lcd.o
+ks0108bDrawPixel                                  ks0108b.o
+                                                  lcd.o
+ks0108bReadBlock                                  ks0108b.o
+                                                  lcd.o
+ks0108bReadData                                   ks0108b.o
+ks0108bReset                                      ks0108b.o
+                                                  lcd.o
+ks0108bSetColumn                                  ks0108b.o
+ks0108bSetPage                                    ks0108b.o
+ks0108bSetStartLine                               ks0108b.o
+ks0108bWriteData                                  ks0108b.o
+lcdClearScreen                                    lcd.o
+                                                  ui.o
+                                                  glcdbp.o
+lcdConfig                                         lcd.o
+                                                  glcdbp.o
+lcdDrawBig                                        lcd.o
+                                                  ui.o
+lcdDrawBox                                        lcd.o
+                                                  ui.o
+lcdDrawChar                                       lcd.o
+                                                  glcdbp.o
+lcdDrawCircle                                     lcd.o
+                                                  ui.o
+lcdDrawLine                                       lcd.o
+                                                  ui.o
+lcdDrawLogo                                       lcd.o
+                                                  glcdbp.o
+lcdDrawPixel                                      lcd.o
+                                                  ui.o
+lcdDrawSprite                                     lcd.o
+                                                  ui.o
+lcdEraseBlock                                     lcd.o
+                                                  ui.o
+lcdGetDataBlock                                   lcd.o
+main                                              glcdbp.o
+                                                  d:/program files/winavr-20100110/bin/../lib/gcc/avr/4.3.3/../../../../avr/lib/avr5/crtm168.o
+putBin                                            serial.o
+putChar                                           serial.o
+putDec                                            serial.o
+putHex                                            serial.o
+putLine                                           serial.o
+readData                                          io_support.o
+                                                  ks0108b.o
+                                                  t6963.o
+reverse                                           glcdbp.o
+                                                  ui.o
+                                                  lcd.o
+                                                  ks0108b.o
+                                                  t6963.o
+rxRingBuffer                                      interrupts.o
+                                                  serial.o
+                                                  glcdbp.o
+rxRingHead                                        glcdbp.o
+                                                  interrupts.o
+                                                  serial.o
+rxRingTail                                        glcdbp.o
+                                                  serial.o
+serialBufferPop                                   serial.o
+                                                  ui.o
+                                                  glcdbp.o
+serialInit                                        serial.o
+                                                  ui.o
+                                                  glcdbp.o
+setBacklightLevel                                 nvm.o
+                                                  ui.o
+setBaudRate                                       nvm.o
+                                                  ui.o
+                                                  glcdbp.o
+setData                                           io_support.o
+                                                  ks0108b.o
+                                                  t6963.o
+setPinsDefault                                    ks0108b.o
+strobeEN                                          ks0108b.o
+t6963BitSR                                        t6963.o
+t6963BusyWait                                     t6963.o
+t6963Clear                                        t6963.o
+                                                  lcd.o
+t6963DisplayInit                                  t6963.o
+                                                  lcd.o
+t6963DrawPixel                                    t6963.o
+                                                  lcd.o
+t6963ReadBlock                                    t6963.o
+                                                  lcd.o
+t6963ReadData                                     t6963.o
+t6963ReadStatus                                   t6963.o
+t6963SetPointer                                   t6963.o
+t6963WriteCmd                                     t6963.o
+t6963WriteData                                    t6963.o
+textLength                                        lcd.o
+                                                  ui.o
+textOrigin                                        lcd.o
+                                                  ui.o
+timerInit                                         glcdbp.o
+toggleReverse                                     nvm.o
+                                                  ui.o
+toggleSplash                                      nvm.o
+                                                  ui.o
+uiStateMachine                                    ui.o
+                                                  glcdbp.o
+xDim                                              lcd.o
+                                                  ui.o
+yDim                                              lcd.o
+                                                  ui.o

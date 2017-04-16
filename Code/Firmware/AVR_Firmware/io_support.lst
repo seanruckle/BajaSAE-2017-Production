@@ -1,0 +1,242 @@
+   1               		.file	"io_support.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	ioInit
+  12               	ioInit:
+  13               	.LFB0:
+  14               		.file 1 "io_support.c"
+   1:io_support.c  **** /***************************************************************************
+   2:io_support.c  **** io_support.c
+   3:io_support.c  **** 
+   4:io_support.c  **** IO support function file for the serial graphical LCD backpack project. This
+   5:io_support.c  ****  file provides an init function for the IO pins, as well as a set/get data
+   6:io_support.c  ****  function which abstracts away the dance you have to do to integrate data
+   7:io_support.c  ****  from two different ports into one byte.
+   8:io_support.c  **** 
+   9:io_support.c  **** 02 May 2013 - Mike Hord, SparkFun Electronics
+  10:io_support.c  **** 
+  11:io_support.c  **** This code is released under the Creative Commons Attribution Share-Alike 3.0
+  12:io_support.c  ****  license. You are free to reuse, remix, or redistribute it as you see fit,
+  13:io_support.c  ****  so long as you provide attribution to SparkFun Electronics.
+  14:io_support.c  **** 
+  15:io_support.c  **** ***************************************************************************/
+  16:io_support.c  **** 
+  17:io_support.c  **** #include <avr/io.h>
+  18:io_support.c  **** #include "glcdbp.h"
+  19:io_support.c  **** #include "io_support.h"
+  20:io_support.c  **** 
+  21:io_support.c  **** // This is setup in glcdbp.c and is used to track the "type" of the display
+  22:io_support.c  **** //  throughout the code.
+  23:io_support.c  **** extern enum DISPLAY_TYPE display;
+  24:io_support.c  **** 
+  25:io_support.c  **** void ioInit(void)
+  26:io_support.c  **** {
+  15               		.loc 1 26 0
+  16               		.cfi_startproc
+  17               	/* prologue: function */
+  18               	/* frame size = 0 */
+  19               	/* stack size = 0 */
+  20               	.L__stack_usage = 0
+  27:io_support.c  ****   // Set up the data direction registers for the data bus pins.
+  28:io_support.c  ****   //  The data bus is on PB0:1 and PD2:7, so make those pins outputs.
+  29:io_support.c  ****   DDRB = 0b00001111;
+  21               		.loc 1 29 0
+  22 0000 8FE0      		ldi r24,lo8(15)
+  23 0002 84B9      		out 0x4,r24
+  30:io_support.c  ****   DDRD = 0b11111100;
+  24               		.loc 1 30 0
+  25 0004 8CEF      		ldi r24,lo8(-4)
+  26 0006 8AB9      		out 0xa,r24
+  31:io_support.c  **** 
+  32:io_support.c  ****   PORTB &= ~(1<<nBL_EN);  // Turn backlight on
+  27               		.loc 1 32 0
+  28 0008 2A98      		cbi 0x5,2
+  33:io_support.c  ****   
+  34:io_support.c  ****   // Now we need to configure the I/O to support the two types of display.
+  35:io_support.c  ****   if (display == SMALL)
+  29               		.loc 1 35 0
+  30 000a 8091 0000 		lds r24,display
+  31 000e 8823      		tst r24
+  32 0010 01F0      		breq .L4
+  36:io_support.c  ****   {
+  37:io_support.c  ****     DDRC =  ((1<<EN) | (1<<RS) | (1<<R_W) | (1<<RESET) | (1<<CS1) | (1<<CS2));
+  38:io_support.c  ****     PORTC = ((1<<EN) | (1<<RS) | (1<<R_W) | (1<<RESET) | (1<<CS1) | (1<<CS2));
+  39:io_support.c  ****   }
+  40:io_support.c  ****   else if (display == LARGE)
+  33               		.loc 1 40 0
+  34 0012 8130      		cpi r24,lo8(1)
+  35 0014 01F4      		brne .L1
+  36               	.L4:
+  41:io_support.c  ****   {
+  42:io_support.c  ****     DDRC =  ((1<<WR) | (1<<RD) | (1<<CE) | (1<<CD) | (1<<HALT) | (1<<RST));
+  37               		.loc 1 42 0
+  38 0016 8FE3      		ldi r24,lo8(63)
+  39 0018 87B9      		out 0x7,r24
+  43:io_support.c  ****     PORTC = ((1<<WR) | (1<<RD) | (1<<CE) | (1<<CD) | (1<<HALT) | (1<<RST));
+  40               		.loc 1 43 0
+  41 001a 88B9      		out 0x8,r24
+  42               	.L1:
+  43 001c 0895      		ret
+  44               		.cfi_endproc
+  45               	.LFE0:
+  47               	.global	setData
+  49               	setData:
+  50               	.LFB1:
+  44:io_support.c  ****   }
+  45:io_support.c  **** }
+  46:io_support.c  **** 
+  47:io_support.c  **** // Abstracts away the fact that the data pins are not on one port. We *could*
+  48:io_support.c  **** //  inline this code whereever necessary, but who wants to read all this?
+  49:io_support.c  **** void setData(uint8_t data)
+  50:io_support.c  **** {
+  51               		.loc 1 50 0
+  52               		.cfi_startproc
+  53               	.LVL0:
+  54               	/* prologue: function */
+  55               	/* frame size = 0 */
+  56               	/* stack size = 0 */
+  57               	.L__stack_usage = 0
+  51:io_support.c  ****   // Set the port direction registers to make data pins outputs.
+  52:io_support.c  ****   DDRB |= 0x03;
+  58               		.loc 1 52 0
+  59 001e 94B1      		in r25,0x4
+  60 0020 9360      		ori r25,lo8(3)
+  61 0022 94B9      		out 0x4,r25
+  53:io_support.c  ****   DDRD |= 0xFC;
+  62               		.loc 1 53 0
+  63 0024 9AB1      		in r25,0xa
+  64 0026 9C6F      		ori r25,lo8(-4)
+  65 0028 9AB9      		out 0xa,r25
+  54:io_support.c  ****   
+  55:io_support.c  ****   PORTB &= 0xFC;    // Clear PB7:2 in preparation for data.
+  66               		.loc 1 55 0
+  67 002a 95B1      		in r25,0x5
+  68 002c 9C7F      		andi r25,lo8(-4)
+  69 002e 95B9      		out 0x5,r25
+  56:io_support.c  ****   PORTD &= 0x03;    // Clear PD1:0.
+  70               		.loc 1 56 0
+  71 0030 9BB1      		in r25,0xb
+  72 0032 9370      		andi r25,lo8(3)
+  73 0034 9BB9      		out 0xb,r25
+  57:io_support.c  ****   
+  58:io_support.c  ****   PORTB |= (data & 0x03); // Mask off PB1:0 so we don't change them
+  74               		.loc 1 58 0
+  75 0036 25B1      		in r18,0x5
+  76 0038 982F      		mov r25,r24
+  77 003a 9370      		andi r25,lo8(3)
+  78 003c 922B      		or r25,r18
+  79 003e 95B9      		out 0x5,r25
+  59:io_support.c  ****                           //  and then write the other 6 bits.
+  60:io_support.c  ****   PORTD |= (data & 0xFC); // Mask off PD7:2 so we don't change them
+  80               		.loc 1 60 0
+  81 0040 9BB1      		in r25,0xb
+  82 0042 8C7F      		andi r24,lo8(-4)
+  83               	.LVL1:
+  84 0044 892B      		or r24,r25
+  85 0046 8BB9      		out 0xb,r24
+  86 0048 0895      		ret
+  87               		.cfi_endproc
+  88               	.LFE1:
+  90               	.global	readData
+  92               	readData:
+  93               	.LFB2:
+  61:io_support.c  ****                           //  and then write the other two bits.
+  62:io_support.c  ****                           //  The data is now in place.
+  63:io_support.c  **** }
+  64:io_support.c  **** 
+  65:io_support.c  **** // Same deal as setData.
+  66:io_support.c  **** uint8_t readData(void)
+  67:io_support.c  **** {
+  94               		.loc 1 67 0
+  95               		.cfi_startproc
+  96               	/* prologue: function */
+  97               	/* frame size = 0 */
+  98               	/* stack size = 0 */
+  99               	.L__stack_usage = 0
+  68:io_support.c  ****   // Set the port direction to input.
+  69:io_support.c  ****   DDRB &= ~(0x03);
+ 100               		.loc 1 69 0
+ 101 004a 84B1      		in r24,0x4
+ 102 004c 8C7F      		andi r24,lo8(-4)
+ 103 004e 84B9      		out 0x4,r24
+  70:io_support.c  ****   DDRD &= ~(0xFC);
+ 104               		.loc 1 70 0
+ 105 0050 8AB1      		in r24,0xa
+ 106 0052 8370      		andi r24,lo8(3)
+ 107 0054 8AB9      		out 0xa,r24
+  71:io_support.c  ****   
+  72:io_support.c  ****   // Pull the data in.
+  73:io_support.c  ****   uint8_t data = (PINB & 0x03);
+ 108               		.loc 1 73 0
+ 109 0056 83B1      		in r24,0x3
+ 110               	.LVL2:
+  74:io_support.c  ****   data |= (PIND & 0xFC);
+ 111               		.loc 1 74 0
+ 112 0058 99B1      		in r25,0x9
+ 113 005a 9C7F      		andi r25,lo8(-4)
+  73:io_support.c  ****   data |= (PIND & 0xFC);
+ 114               		.loc 1 73 0
+ 115 005c 8370      		andi r24,lo8(3)
+ 116               	.LVL3:
+  75:io_support.c  ****   
+  76:io_support.c  ****   return data;
+  77:io_support.c  **** }
+ 117               		.loc 1 77 0
+ 118 005e 892B      		or r24,r25
+ 119               	.LVL4:
+ 120 0060 0895      		ret
+ 121               		.cfi_endproc
+ 122               	.LFE2:
+ 124               	.global	hiZDataPins
+ 126               	hiZDataPins:
+ 127               	.LFB3:
+  78:io_support.c  **** 
+  79:io_support.c  **** // I've noticed that the ks0108b displays don't always play well with their
+  80:io_support.c  **** //  data pins, and to avoid contention and the assorted ugly crap, I've
+  81:io_support.c  **** //  added this function to put the data pins in a hi-z state. I suppose I
+  82:io_support.c  **** //  could just call readData(), but this is easier to read.
+  83:io_support.c  **** void hiZDataPins(void)
+  84:io_support.c  **** {
+ 128               		.loc 1 84 0
+ 129               		.cfi_startproc
+ 130               	/* prologue: function */
+ 131               	/* frame size = 0 */
+ 132               	/* stack size = 0 */
+ 133               	.L__stack_usage = 0
+  85:io_support.c  ****   // Set the port direction to input.
+  86:io_support.c  ****   DDRB &= ~(0x03);
+ 134               		.loc 1 86 0
+ 135 0062 84B1      		in r24,0x4
+ 136 0064 8C7F      		andi r24,lo8(-4)
+ 137 0066 84B9      		out 0x4,r24
+  87:io_support.c  ****   DDRD &= ~(0xFC);
+ 138               		.loc 1 87 0
+ 139 0068 8AB1      		in r24,0xa
+ 140 006a 8370      		andi r24,lo8(3)
+ 141 006c 8AB9      		out 0xa,r24
+ 142 006e 0895      		ret
+ 143               		.cfi_endproc
+ 144               	.LFE3:
+ 146               	.Letext0:
+ 147               		.file 2 "/usr/lib/avr/include/stdint.h"
+ 148               		.file 3 "glcdbp.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 io_support.c
+     /tmp/ccYnbs82.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccYnbs82.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccYnbs82.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccYnbs82.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccYnbs82.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccYnbs82.s:12     .text:0000000000000000 ioInit
+     /tmp/ccYnbs82.s:49     .text:000000000000001e setData
+     /tmp/ccYnbs82.s:92     .text:000000000000004a readData
+     /tmp/ccYnbs82.s:126    .text:0000000000000062 hiZDataPins
+
+UNDEFINED SYMBOLS
+display

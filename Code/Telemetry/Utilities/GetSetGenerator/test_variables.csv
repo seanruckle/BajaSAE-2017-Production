@@ -1,0 +1,5 @@
+class,TestVar,,A class to test the output of the get set generator
+unsigned char,speed,16,
+unsigned char,temp,32,
+int,cowbell,64,
+long int,moreCowbell,128,

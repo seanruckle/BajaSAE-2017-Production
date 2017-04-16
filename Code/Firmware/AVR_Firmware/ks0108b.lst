@@ -1,0 +1,1439 @@
+   1               		.file	"ks0108b.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	ks0108bReset
+  12               	ks0108bReset:
+  13               	.LFB7:
+  14               		.file 1 "ks0108b.c"
+   1:ks0108b.c     **** /***************************************************************************
+   2:ks0108b.c     **** ks0108b.c
+   3:ks0108b.c     **** 
+   4:ks0108b.c     **** Driver support file for the serial graphical LCD backpack project. This file
+   5:ks0108b.c     ****  adds support for ks0108b-flavored graphical LCDs, providing functions to
+   6:ks0108b.c     ****  initialize and interface with the controller.
+   7:ks0108b.c     **** 
+   8:ks0108b.c     **** 02 May 2013 - Mike Hord, SparkFun Electronics
+   9:ks0108b.c     **** 
+  10:ks0108b.c     **** This code is released under the Creative Commons Attribution Share-Alike 3.0
+  11:ks0108b.c     ****  license. You are free to reuse, remix, or redistribute it as you see fit,
+  12:ks0108b.c     ****  so long as you provide attribution to SparkFun Electronics.
+  13:ks0108b.c     **** 
+  14:ks0108b.c     **** ***************************************************************************/
+  15:ks0108b.c     **** //#define F_CPU 16000000UL
+  16:ks0108b.c     **** 
+  17:ks0108b.c     **** #include <avr/io.h>
+  18:ks0108b.c     **** #include <util/delay.h>    // F_CPU is defined in the makefile
+  19:ks0108b.c     **** #include "glcdbp.h"
+  20:ks0108b.c     **** #include "io_support.h"
+  21:ks0108b.c     **** #include "lcd.h"
+  22:ks0108b.c     **** #include "ks0108b.h"
+  23:ks0108b.c     **** #include "serial.h"
+  24:ks0108b.c     **** 
+  25:ks0108b.c     **** #define E_DELAY 5 // This delay is the minimum time EN will be
+  26:ks0108b.c     ****               //  low or high when enable is strobed. By the
+  27:ks0108b.c     ****               //  datasheet, this shouldn't need to be more
+  28:ks0108b.c     ****               //  than 1000ns; experimentation has put the
+  29:ks0108b.c     ****               //  lie to that. Value in microseconds.
+  30:ks0108b.c     **** #define R_DELAY 10 // This delay is the delay between EN and
+  31:ks0108b.c     ****               //  data reads, and between EN changes around
+  32:ks0108b.c     ****               //  data reads. Again, it shouldn't *need* to
+  33:ks0108b.c     ****               //  be this long, but the datasheet speaks
+  34:ks0108b.c     ****               //  great falsehoods. Value in microseconds.
+  35:ks0108b.c     ****               
+  36:ks0108b.c     **** uint8_t column = 0; // We want to be able to track the current
+  37:ks0108b.c     ****               //  x position sometimes; it allows us to pick up where other
+  38:ks0108b.c     ****               //  functions leave off.
+  39:ks0108b.c     ****               
+  40:ks0108b.c     **** extern volatile uint8_t reverse; // Dark-on-light or light-on-dark?
+  41:ks0108b.c     ****                                  //  Declared in glcdbp.c
+  42:ks0108b.c     **** 
+  43:ks0108b.c     **** // ks0108bReset()- pretty self explanatory, but I'm not really sure what
+  44:ks0108b.c     **** //  the point of twiddling the reset line is, as it doesn't seem to really
+  45:ks0108b.c     **** //  *reset* anything on the display. Makes us feel good, though.
+  46:ks0108b.c     **** void ks0108bReset(void)
+  47:ks0108b.c     **** {
+  15               		.loc 1 47 0
+  16               		.cfi_startproc
+  17               	/* prologue: function */
+  18               	/* frame size = 0 */
+  19               	/* stack size = 0 */
+  20               	.L__stack_usage = 0
+  48:ks0108b.c     ****   PORTC &= ~(1<<RESET);
+  21               		.loc 1 48 0
+  22 0000 4398      		cbi 0x8,3
+  23               	.LVL0:
+  24               	.LBB22:
+  25               	.LBB23:
+  26               		.file 2 "/usr/lib/avr/include/util/delay.h"
+   1:/usr/lib/avr/include/util/delay.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   2:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2004,2005,2007 Joerg Wunsch
+   3:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2007  Florin-Viorel Petrov
+   4:/usr/lib/avr/include/util/delay.h ****    All rights reserved.
+   5:/usr/lib/avr/include/util/delay.h **** 
+   6:/usr/lib/avr/include/util/delay.h ****    Redistribution and use in source and binary forms, with or without
+   7:/usr/lib/avr/include/util/delay.h ****    modification, are permitted provided that the following conditions are met:
+   8:/usr/lib/avr/include/util/delay.h **** 
+   9:/usr/lib/avr/include/util/delay.h ****    * Redistributions of source code must retain the above copyright
+  10:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer.
+  11:/usr/lib/avr/include/util/delay.h **** 
+  12:/usr/lib/avr/include/util/delay.h ****    * Redistributions in binary form must reproduce the above copyright
+  13:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer in
+  14:/usr/lib/avr/include/util/delay.h ****      the documentation and/or other materials provided with the
+  15:/usr/lib/avr/include/util/delay.h ****      distribution.
+  16:/usr/lib/avr/include/util/delay.h **** 
+  17:/usr/lib/avr/include/util/delay.h ****    * Neither the name of the copyright holders nor the names of
+  18:/usr/lib/avr/include/util/delay.h ****      contributors may be used to endorse or promote products derived
+  19:/usr/lib/avr/include/util/delay.h ****      from this software without specific prior written permission.
+  20:/usr/lib/avr/include/util/delay.h **** 
+  21:/usr/lib/avr/include/util/delay.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  22:/usr/lib/avr/include/util/delay.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  23:/usr/lib/avr/include/util/delay.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  24:/usr/lib/avr/include/util/delay.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  25:/usr/lib/avr/include/util/delay.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  26:/usr/lib/avr/include/util/delay.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  27:/usr/lib/avr/include/util/delay.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  28:/usr/lib/avr/include/util/delay.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  29:/usr/lib/avr/include/util/delay.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  30:/usr/lib/avr/include/util/delay.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  31:/usr/lib/avr/include/util/delay.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  32:/usr/lib/avr/include/util/delay.h **** 
+  33:/usr/lib/avr/include/util/delay.h **** /* $Id$ */
+  34:/usr/lib/avr/include/util/delay.h **** 
+  35:/usr/lib/avr/include/util/delay.h **** #ifndef _UTIL_DELAY_H_
+  36:/usr/lib/avr/include/util/delay.h **** #define _UTIL_DELAY_H_ 1
+  37:/usr/lib/avr/include/util/delay.h **** 
+  38:/usr/lib/avr/include/util/delay.h **** #ifndef __HAS_DELAY_CYCLES
+  39:/usr/lib/avr/include/util/delay.h **** #define __HAS_DELAY_CYCLES 1
+  40:/usr/lib/avr/include/util/delay.h **** #endif
+  41:/usr/lib/avr/include/util/delay.h **** 
+  42:/usr/lib/avr/include/util/delay.h **** #include <inttypes.h>
+  43:/usr/lib/avr/include/util/delay.h **** #include <util/delay_basic.h>
+  44:/usr/lib/avr/include/util/delay.h **** #include <math.h>
+  45:/usr/lib/avr/include/util/delay.h **** 
+  46:/usr/lib/avr/include/util/delay.h **** /** \file */
+  47:/usr/lib/avr/include/util/delay.h **** /** \defgroup util_delay <util/delay.h>: Convenience functions for busy-wait delay loops
+  48:/usr/lib/avr/include/util/delay.h ****     \code
+  49:/usr/lib/avr/include/util/delay.h ****     #define F_CPU 1000000UL  // 1 MHz
+  50:/usr/lib/avr/include/util/delay.h ****     //#define F_CPU 14.7456E6
+  51:/usr/lib/avr/include/util/delay.h ****     #include <util/delay.h>
+  52:/usr/lib/avr/include/util/delay.h ****     \endcode
+  53:/usr/lib/avr/include/util/delay.h **** 
+  54:/usr/lib/avr/include/util/delay.h ****     \note As an alternative method, it is possible to pass the
+  55:/usr/lib/avr/include/util/delay.h ****     F_CPU macro down to the compiler from the Makefile.
+  56:/usr/lib/avr/include/util/delay.h ****     Obviously, in that case, no \c \#define statement should be
+  57:/usr/lib/avr/include/util/delay.h ****     used.
+  58:/usr/lib/avr/include/util/delay.h **** 
+  59:/usr/lib/avr/include/util/delay.h ****     The functions in this header file are wrappers around the basic
+  60:/usr/lib/avr/include/util/delay.h ****     busy-wait functions from <util/delay_basic.h>.  They are meant as
+  61:/usr/lib/avr/include/util/delay.h ****     convenience functions where actual time values can be specified
+  62:/usr/lib/avr/include/util/delay.h ****     rather than a number of cycles to wait for.  The idea behind is
+  63:/usr/lib/avr/include/util/delay.h ****     that compile-time constant expressions will be eliminated by
+  64:/usr/lib/avr/include/util/delay.h ****     compiler optimization so floating-point expressions can be used
+  65:/usr/lib/avr/include/util/delay.h ****     to calculate the number of delay cycles needed based on the CPU
+  66:/usr/lib/avr/include/util/delay.h ****     frequency passed by the macro F_CPU.
+  67:/usr/lib/avr/include/util/delay.h **** 
+  68:/usr/lib/avr/include/util/delay.h ****     \note In order for these functions to work as intended, compiler
+  69:/usr/lib/avr/include/util/delay.h ****     optimizations <em>must</em> be enabled, and the delay time
+  70:/usr/lib/avr/include/util/delay.h ****     <em>must</em> be an expression that is a known constant at
+  71:/usr/lib/avr/include/util/delay.h ****     compile-time.  If these requirements are not met, the resulting
+  72:/usr/lib/avr/include/util/delay.h ****     delay will be much longer (and basically unpredictable), and
+  73:/usr/lib/avr/include/util/delay.h ****     applications that otherwise do not use floating-point calculations
+  74:/usr/lib/avr/include/util/delay.h ****     will experience severe code bloat by the floating-point library
+  75:/usr/lib/avr/include/util/delay.h ****     routines linked into the application.
+  76:/usr/lib/avr/include/util/delay.h **** 
+  77:/usr/lib/avr/include/util/delay.h ****     The functions available allow the specification of microsecond, and
+  78:/usr/lib/avr/include/util/delay.h ****     millisecond delays directly, using the application-supplied macro
+  79:/usr/lib/avr/include/util/delay.h ****     F_CPU as the CPU clock frequency (in Hertz).
+  80:/usr/lib/avr/include/util/delay.h **** 
+  81:/usr/lib/avr/include/util/delay.h **** */
+  82:/usr/lib/avr/include/util/delay.h **** 
+  83:/usr/lib/avr/include/util/delay.h **** #if !defined(__DOXYGEN__)
+  84:/usr/lib/avr/include/util/delay.h **** static inline void _delay_us(double __us) __attribute__((always_inline));
+  85:/usr/lib/avr/include/util/delay.h **** static inline void _delay_ms(double __ms) __attribute__((always_inline));
+  86:/usr/lib/avr/include/util/delay.h **** #endif
+  87:/usr/lib/avr/include/util/delay.h **** 
+  88:/usr/lib/avr/include/util/delay.h **** #ifndef F_CPU
+  89:/usr/lib/avr/include/util/delay.h **** /* prevent compiler error by supplying a default */
+  90:/usr/lib/avr/include/util/delay.h **** # warning "F_CPU not defined for <util/delay.h>"
+  91:/usr/lib/avr/include/util/delay.h **** # define F_CPU 1000000UL
+  92:/usr/lib/avr/include/util/delay.h **** #endif
+  93:/usr/lib/avr/include/util/delay.h **** 
+  94:/usr/lib/avr/include/util/delay.h **** #ifndef __OPTIMIZE__
+  95:/usr/lib/avr/include/util/delay.h **** # warning "Compiler optimizations disabled; functions from <util/delay.h> won't work as designed"
+  96:/usr/lib/avr/include/util/delay.h **** #endif
+  97:/usr/lib/avr/include/util/delay.h **** 
+  98:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+  99:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 100:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 101:/usr/lib/avr/include/util/delay.h **** #  include <math.h>
+ 102:/usr/lib/avr/include/util/delay.h **** #endif
+ 103:/usr/lib/avr/include/util/delay.h **** 
+ 104:/usr/lib/avr/include/util/delay.h **** /**
+ 105:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 106:/usr/lib/avr/include/util/delay.h **** 
+ 107:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __ms milliseconds, using _delay_loop_2().
+ 108:/usr/lib/avr/include/util/delay.h **** 
+ 109:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 110:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 111:/usr/lib/avr/include/util/delay.h **** 
+ 112:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 262.14 ms / F_CPU in MHz.
+ 113:/usr/lib/avr/include/util/delay.h **** 
+ 114:/usr/lib/avr/include/util/delay.h ****    When the user request delay which exceed the maximum possible one,
+ 115:/usr/lib/avr/include/util/delay.h ****    _delay_ms() provides a decreased resolution functionality. In this
+ 116:/usr/lib/avr/include/util/delay.h ****    mode _delay_ms() will work with a resolution of 1/10 ms, providing
+ 117:/usr/lib/avr/include/util/delay.h ****    delays up to 6.5535 seconds (independent from CPU frequency).  The
+ 118:/usr/lib/avr/include/util/delay.h ****    user will not be informed about decreased resolution.
+ 119:/usr/lib/avr/include/util/delay.h **** 
+ 120:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 121:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 ms/ F_CPU in MHz. For
+ 122:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflows results in
+ 123:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0ms.
+ 124:/usr/lib/avr/include/util/delay.h **** 
+ 125:/usr/lib/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 126:/usr/lib/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 127:/usr/lib/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 128:/usr/lib/avr/include/util/delay.h **** 
+ 129:/usr/lib/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 130:/usr/lib/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 131:/usr/lib/avr/include/util/delay.h **** 
+ 132:/usr/lib/avr/include/util/delay.h ****    Note: The new implementation of _delay_ms(double __ms) with 
+ 133:/usr/lib/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible. 
+ 134:/usr/lib/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 135:/usr/lib/avr/include/util/delay.h ****    Also, the backward compatible
+ 136:/usr/lib/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 137:/usr/lib/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 138:/usr/lib/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 139:/usr/lib/avr/include/util/delay.h **** 
+ 140:/usr/lib/avr/include/util/delay.h ****  */
+ 141:/usr/lib/avr/include/util/delay.h **** void
+ 142:/usr/lib/avr/include/util/delay.h **** _delay_ms(double __ms)
+ 143:/usr/lib/avr/include/util/delay.h **** {
+ 144:/usr/lib/avr/include/util/delay.h **** 	double __tmp ; 
+ 145:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 146:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 147:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 148:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 149:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 150:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e3) * __ms;
+ 151:/usr/lib/avr/include/util/delay.h **** 
+ 152:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 153:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 154:/usr/lib/avr/include/util/delay.h **** 
+ 155:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 156:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 157:/usr/lib/avr/include/util/delay.h **** 
+ 158:/usr/lib/avr/include/util/delay.h **** 	#else
+ 159:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 160:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 161:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 162:/usr/lib/avr/include/util/delay.h **** 
+ 163:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+  27               		.loc 2 163 0
+  28 0002 2FEF      		ldi r18,lo8(159999)
+  29 0004 80E7      		ldi r24,hi8(159999)
+  30 0006 92E0      		ldi r25,hlo8(159999)
+  31 0008 2150      		1: subi r18,1
+  32 000a 8040      		sbci r24,0
+  33 000c 9040      		sbci r25,0
+  34 000e 01F4      		brne 1b
+  35 0010 00C0      		rjmp .
+  36 0012 0000      		nop
+  37               	.LBE23:
+  38               	.LBE22:
+  49:ks0108b.c     ****   _delay_ms(50);
+  50:ks0108b.c     ****   PORTC |= (1<<RESET);
+  39               		.loc 1 50 0
+  40 0014 439A      		sbi 0x8,3
+  41               	.LVL1:
+  42               	.LBB24:
+  43               	.LBB25:
+  44               		.loc 2 163 0
+  45 0016 2FEF      		ldi r18,lo8(159999)
+  46 0018 80E7      		ldi r24,hi8(159999)
+  47 001a 92E0      		ldi r25,hlo8(159999)
+  48 001c 2150      		1: subi r18,1
+  49 001e 8040      		sbci r24,0
+  50 0020 9040      		sbci r25,0
+  51 0022 01F4      		brne 1b
+  52 0024 00C0      		rjmp .
+  53 0026 0000      		nop
+  54 0028 0895      		ret
+  55               	.LBE25:
+  56               	.LBE24:
+  57               		.cfi_endproc
+  58               	.LFE7:
+  60               	.global	strobeEN
+  62               	strobeEN:
+  63               	.LFB17:
+  51:ks0108b.c     ****   _delay_ms(50);
+  52:ks0108b.c     **** }
+  53:ks0108b.c     **** 
+  54:ks0108b.c     **** // Enable the display. Should only need to do this at startup time.
+  55:ks0108b.c     **** void ks0108bDisplayOn(void)
+  56:ks0108b.c     **** {
+  57:ks0108b.c     ****   // Data lines should be 0x3F for display enable.
+  58:ks0108b.c     ****   PORTC &= ~( (1<<R_W)|      // Clear R_W (Write mode)
+  59:ks0108b.c     ****               (1<<RS));      // Clear RS (Instruction mode)
+  60:ks0108b.c     ****   setData(0x3F);
+  61:ks0108b.c     ****   strobeEN();
+  62:ks0108b.c     ****   hiZDataPins();     // Avoid bus contention with the ks0108b driver.
+  63:ks0108b.c     ****   setPinsDefault();
+  64:ks0108b.c     **** }
+  65:ks0108b.c     **** 
+  66:ks0108b.c     **** // It's possible, if kinda weird, to tell the ks0108b that the start line is
+  67:ks0108b.c     **** //  not the top line of the display. We're not going to truck with that crap-
+  68:ks0108b.c     **** //  we'll just start at the top and call it good.
+  69:ks0108b.c     **** void ks0108bSetStartLine(void)
+  70:ks0108b.c     **** {
+  71:ks0108b.c     ****   PORTC &= ~( (1<<CS1)| // Let's hit both chips.
+  72:ks0108b.c     ****               (1<<CS2)|
+  73:ks0108b.c     ****               (1<<R_W)|  // Clear R_W (Write mode)
+  74:ks0108b.c     ****               (1<<RS));  // Clear RS (Register select for
+  75:ks0108b.c     ****                          //  enable register)
+  76:ks0108b.c     ****   // Data lines should be 0xC0 for set start line to 0.
+  77:ks0108b.c     ****   setData(0xC0);
+  78:ks0108b.c     ****   strobeEN();
+  79:ks0108b.c     ****   hiZDataPins();     // Avoid bus contention with the ks0108b driver.
+  80:ks0108b.c     ****   setPinsDefault();
+  81:ks0108b.c     **** }
+  82:ks0108b.c     **** 
+  83:ks0108b.c     **** // As mentioned elsewhere, this display is divided into 8 meta-rows (or pages,
+  84:ks0108b.c     **** //  to use the datasheet nomenclature), and within each of those pages are 32
+  85:ks0108b.c     **** //  columns. This function points us to one of those columns. We'll figure out
+  86:ks0108b.c     **** //  which half of the screen we're on in the next stage or our operation- that
+  87:ks0108b.c     **** //  will determine which chip select line we need to assert, since we don't
+  88:ks0108b.c     **** //  need to assert a CS line here (it wouldn't help anyway).
+  89:ks0108b.c     **** void ks0108bSetColumn(uint8_t address)
+  90:ks0108b.c     **** {  
+  91:ks0108b.c     ****   PORTC &= ~( (1<<R_W)|
+  92:ks0108b.c     ****               (1<<RS));
+  93:ks0108b.c     ****   // For Y writes, bits 7:6 of the data bus should be set to 01. We should
+  94:ks0108b.c     ****   //  just make sure that's done before we do anything else...
+  95:ks0108b.c     ****   column = address;
+  96:ks0108b.c     ****   address = (address | 0x40) & 0x7F;
+  97:ks0108b.c     ****   setData(address);
+  98:ks0108b.c     ****   strobeEN();
+  99:ks0108b.c     ****   hiZDataPins();     // Avoid bus contention with the ks0108b driver.
+ 100:ks0108b.c     ****   setPinsDefault();
+ 101:ks0108b.c     **** }
+ 102:ks0108b.c     **** 
+ 103:ks0108b.c     **** // Select the page (meta-row) that we're currently looking at. This puts BOTH
+ 104:ks0108b.c     **** //  halves of the screen on the same page, so writes that proceed across from
+ 105:ks0108b.c     **** //  L to R can continue across the page boundary without interruption.
+ 106:ks0108b.c     **** void ks0108bSetPage(uint8_t address)
+ 107:ks0108b.c     **** {  
+ 108:ks0108b.c     ****   // Now, on to the actual port manipulations needed to make this happen.
+ 109:ks0108b.c     ****   PORTC &= ~( (1<<R_W)|      // Clear R_W (Write mode)
+ 110:ks0108b.c     ****               (1<<RS));      // Clear RS (Register select for
+ 111:ks0108b.c     ****                              //  address registers)
+ 112:ks0108b.c     ****   // For X writes, bits 7:3 of the data bus should be set to 10111. We should
+ 113:ks0108b.c     ****   //  just make sure that's done before we do anything else...
+ 114:ks0108b.c     ****   address = (address | 0xB8) & 0xBF;
+ 115:ks0108b.c     ****   setData(address);
+ 116:ks0108b.c     ****   strobeEN();
+ 117:ks0108b.c     ****   hiZDataPins();     // Avoid bus contention with the ks0108b driver.
+ 118:ks0108b.c     ****   setPinsDefault();
+ 119:ks0108b.c     **** }
+ 120:ks0108b.c     **** // ks0108bWriteData- write a data byte to the controller. This is only for
+ 121:ks0108b.c     **** //  writing data that is expected to appear on screen, but then, that's
+ 122:ks0108b.c     **** //  really *all* this LCD lets you write data for!
+ 123:ks0108b.c     **** void ks0108bWriteData(uint8_t data)
+ 124:ks0108b.c     **** {  
+ 125:ks0108b.c     ****   // By tracking what column we're writing to, we can avoid having to
+ 126:ks0108b.c     ****   //  do any weird "which side am I on" logic, keeping the interface more
+ 127:ks0108b.c     ****   //  intuitive.
+ 128:ks0108b.c     ****   if (column < 64)   PORTC &= ~( (1<<CS1) |
+ 129:ks0108b.c     ****                                  (1<<R_W));
+ 130:ks0108b.c     ****   else               PORTC &= ~( (1<<CS2) |
+ 131:ks0108b.c     ****                                  (1<<R_W));
+ 132:ks0108b.c     ****   
+ 133:ks0108b.c     ****   // setData() is a function which abstracts the fact that the data lines
+ 134:ks0108b.c     ****   //  to the LCD are not on the same port.
+ 135:ks0108b.c     ****   setData(data);
+ 136:ks0108b.c     ****   
+ 137:ks0108b.c     ****   strobeEN();        // Twiddle EN to latch the data.
+ 138:ks0108b.c     ****   hiZDataPins();     // Avoid bus contention with the ks0108b driver.
+ 139:ks0108b.c     ****   setPinsDefault();
+ 140:ks0108b.c     ****   // The act of writing a data byte to the display causes the display's
+ 141:ks0108b.c     ****   //  internal pointer to increment. We need to update our pointer to
+ 142:ks0108b.c     ****   //  account for that, but if the update pushes our pointer past the
+ 143:ks0108b.c     ****   //  edge, we want to wrap back around. The display doesn't handle
+ 144:ks0108b.c     ****   //  wrapping automatically, so we need to wrap it manually with the
+ 145:ks0108b.c     ****   //  set column function.
+ 146:ks0108b.c     ****   if (++column > 127) 
+ 147:ks0108b.c     ****   {
+ 148:ks0108b.c     ****     column = 0;
+ 149:ks0108b.c     ****     ks0108bSetColumn(0);
+ 150:ks0108b.c     ****   }
+ 151:ks0108b.c     **** }
+ 152:ks0108b.c     **** 
+ 153:ks0108b.c     **** // Read a column of pixel data. The operation is basically thus:
+ 154:ks0108b.c     **** //   1. Pull one CS line and EN low
+ 155:ks0108b.c     **** //   2. Pull EN high.
+ 156:ks0108b.c     **** //   3. Pull EN low.
+ 157:ks0108b.c     **** //   4. Pull EN high.
+ 158:ks0108b.c     **** //   5. Data is available to be read.
+ 159:ks0108b.c     **** //   6. Reset signal lines to rest state.
+ 160:ks0108b.c     **** uint8_t ks0108bReadData(uint8_t x)
+ 161:ks0108b.c     **** {  
+ 162:ks0108b.c     ****   uint8_t data;
+ 163:ks0108b.c     ****   
+ 164:ks0108b.c     ****   if (x<64)  // Are we on the left half of the display?
+ 165:ks0108b.c     ****   {  
+ 166:ks0108b.c     ****     PORTC &= ~(1<<CS1);
+ 167:ks0108b.c     ****   }
+ 168:ks0108b.c     ****   else       // Or the right half of the display?
+ 169:ks0108b.c     ****   {  
+ 170:ks0108b.c     ****     PORTC &= ~(1<<CS2);
+ 171:ks0108b.c     ****   }
+ 172:ks0108b.c     ****   // The number of twiddles of EN is...bizarre. This was established via
+ 173:ks0108b.c     ****   //  experimentation, rather than through any actual data sheet content.
+ 174:ks0108b.c     ****   _delay_us(R_DELAY);
+ 175:ks0108b.c     ****   PORTC |= (1<<EN);
+ 176:ks0108b.c     ****   _delay_us(R_DELAY);
+ 177:ks0108b.c     ****   PORTC &= ~(1<<EN);
+ 178:ks0108b.c     ****   _delay_us(R_DELAY);
+ 179:ks0108b.c     ****   PORTC |= (1<<EN);  
+ 180:ks0108b.c     ****   _delay_us(R_DELAY);
+ 181:ks0108b.c     ****   data = readData();  
+ 182:ks0108b.c     ****   PORTC &= ~(1<<EN);
+ 183:ks0108b.c     ****   _delay_us(R_DELAY);
+ 184:ks0108b.c     ****   setPinsDefault();
+ 185:ks0108b.c     ****   return data;
+ 186:ks0108b.c     **** }
+ 187:ks0108b.c     **** 
+ 188:ks0108b.c     **** // Clear is janky- set x and y to zero and write across the screen.
+ 189:ks0108b.c     **** void ks0108bClear(void)
+ 190:ks0108b.c     **** {
+ 191:ks0108b.c     ****   uint8_t clearVal = 0;
+ 192:ks0108b.c     ****   if (reverse == 1) clearVal = 0xFF;
+ 193:ks0108b.c     ****   for (uint8_t y = 0; y<8; y++)
+ 194:ks0108b.c     ****   {
+ 195:ks0108b.c     ****     ks0108bSetPage(y);
+ 196:ks0108b.c     ****     ks0108bSetColumn(0);
+ 197:ks0108b.c     ****     for (uint8_t x = 0; x<128; x++)
+ 198:ks0108b.c     ****     {
+ 199:ks0108b.c     ****       ks0108bWriteData(clearVal);
+ 200:ks0108b.c     ****     }
+ 201:ks0108b.c     ****   }
+ 202:ks0108b.c     ****   ks0108bSetPage(0);
+ 203:ks0108b.c     ****   ks0108bSetColumn(0);
+ 204:ks0108b.c     **** }
+ 205:ks0108b.c     **** 
+ 206:ks0108b.c     **** // ks0108bReadBlock()- reads an 8x8 block of arbitrary pixels from the display.
+ 207:ks0108b.c     **** //  The block may be split across more than one page, so we'll need to buffer
+ 208:ks0108b.c     **** //  from up to two pages, then do some shifting.
+ 209:ks0108b.c     **** void ks0108bReadBlock(uint8_t x, uint8_t y, uint8_t *buffer)
+ 210:ks0108b.c     **** {
+ 211:ks0108b.c     ****   uint8_t firstRowPixels, secondRowPixels;
+ 212:ks0108b.c     ****   // If y is NOT divisible by 8, then y%8 pixels are on the first line,
+ 213:ks0108b.c     ****   //  and 8-y%8 pixels are on the second line.
+ 214:ks0108b.c     ****   firstRowPixels = y%8;
+ 215:ks0108b.c     ****   secondRowPixels = 8 - (y%8);
+ 216:ks0108b.c     ****   // Okay, now we know how many pixels are in each row. Now let's pull the
+ 217:ks0108b.c     ****   //  data from those two rows.
+ 218:ks0108b.c     ****   ks0108bSetPage(y/8);
+ 219:ks0108b.c     ****   for (uint8_t i = 0; i<8; i++)
+ 220:ks0108b.c     ****   {
+ 221:ks0108b.c     ****     // Fetch the data and left-shift it so the topmost pixel of the group
+ 222:ks0108b.c     ****     //  we're interested in is the MSB.
+ 223:ks0108b.c     ****     buffer[i] = ks0108bReadData(x+i)<<(8-firstRowPixels);
+ 224:ks0108b.c     ****   }
+ 225:ks0108b.c     ****   ks0108bSetPage((y/8) + 1);
+ 226:ks0108b.c     ****   for (uint8_t i = 0; i<8; i++)
+ 227:ks0108b.c     ****   {
+ 228:ks0108b.c     ****     buffer[i] |= ks0108bReadData(x+i)>>(8-secondRowPixels);
+ 229:ks0108b.c     ****   }
+ 230:ks0108b.c     **** }
+ 231:ks0108b.c     **** 
+ 232:ks0108b.c     **** // This is the display-specific pixel draw command. Pretty simple- located the
+ 233:ks0108b.c     **** //  pixel's row and column, read the existing data, twiddle the single pixel
+ 234:ks0108b.c     **** //  according to what we want it to end up being, then re-write the whole
+ 235:ks0108b.c     **** //  byte.
+ 236:ks0108b.c     **** void ks0108bDrawPixel(uint8_t x, uint8_t y, PIX_VAL pixel)
+ 237:ks0108b.c     **** {
+ 238:ks0108b.c     ****   ks0108bSetColumn(x);  // x is simple; it's just the x coordinate.
+ 239:ks0108b.c     ****   ks0108bSetPage(y/8);  // y is less simple; we need to find the page that the
+ 240:ks0108b.c     ****                         //  pixel in question resides on.
+ 241:ks0108b.c     ****   uint8_t currentPixelData = ks0108bReadData(x);  // fetch the existing state
+ 242:ks0108b.c     ****   uint8_t pixelToWrite = (y%8);  // determine which pixel to write
+ 243:ks0108b.c     ****   // This section handles the specifics- do we want to turn the pixel on or
+ 244:ks0108b.c     ****   //  off? The dark-on-white mode status factors into that, as does the user's
+ 245:ks0108b.c     ****   //  command.
+ 246:ks0108b.c     ****   if (reverse == 0)
+ 247:ks0108b.c     ****   {
+ 248:ks0108b.c     ****     if (pixel == ON) currentPixelData |= (1<<pixelToWrite);
+ 249:ks0108b.c     ****     else       currentPixelData &= ~(1<<pixelToWrite);
+ 250:ks0108b.c     ****   }
+ 251:ks0108b.c     ****   else
+ 252:ks0108b.c     ****   {
+ 253:ks0108b.c     ****     if (pixel == OFF) currentPixelData |= (1<<pixelToWrite);
+ 254:ks0108b.c     ****     else       currentPixelData &= ~(1<<pixelToWrite);
+ 255:ks0108b.c     ****   }
+ 256:ks0108b.c     ****   // Now we need to go back to the original column- the read incremented the
+ 257:ks0108b.c     ****   //  address counter- and write the changed value back to the display.
+ 258:ks0108b.c     ****   ks0108bSetColumn(x);
+ 259:ks0108b.c     ****   ks0108bWriteData(currentPixelData);
+ 260:ks0108b.c     **** }
+ 261:ks0108b.c     **** 
+ 262:ks0108b.c     **** // I found myself typing these lines over and over, so I made them a little
+ 263:ks0108b.c     **** //  function of their very own.
+ 264:ks0108b.c     **** void strobeEN(void)
+ 265:ks0108b.c     **** {
+  64               		.loc 1 265 0
+  65               		.cfi_startproc
+  66               	/* prologue: function */
+  67               	/* frame size = 0 */
+  68               	/* stack size = 0 */
+  69               	.L__stack_usage = 0
+  70               	.LVL2:
+  71               	.LBB26:
+  72               	.LBB27:
+ 164:/usr/lib/avr/include/util/delay.h **** 
+ 165:/usr/lib/avr/include/util/delay.h **** #else
+ 166:/usr/lib/avr/include/util/delay.h **** 	uint16_t __ticks;
+ 167:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 4e3) * __ms;
+ 168:/usr/lib/avr/include/util/delay.h **** 	if (__tmp < 1.0)
+ 169:/usr/lib/avr/include/util/delay.h **** 		__ticks = 1;
+ 170:/usr/lib/avr/include/util/delay.h **** 	else if (__tmp > 65535)
+ 171:/usr/lib/avr/include/util/delay.h **** 	{
+ 172:/usr/lib/avr/include/util/delay.h **** 		//	__ticks = requested delay in 1/10 ms
+ 173:/usr/lib/avr/include/util/delay.h **** 		__ticks = (uint16_t) (__ms * 10.0);
+ 174:/usr/lib/avr/include/util/delay.h **** 		while(__ticks)
+ 175:/usr/lib/avr/include/util/delay.h **** 		{
+ 176:/usr/lib/avr/include/util/delay.h **** 			// wait 1/10 ms
+ 177:/usr/lib/avr/include/util/delay.h **** 			_delay_loop_2(((F_CPU) / 4e3) / 10);
+ 178:/usr/lib/avr/include/util/delay.h **** 			__ticks --;
+ 179:/usr/lib/avr/include/util/delay.h **** 		}
+ 180:/usr/lib/avr/include/util/delay.h **** 		return;
+ 181:/usr/lib/avr/include/util/delay.h **** 	}
+ 182:/usr/lib/avr/include/util/delay.h **** 	else
+ 183:/usr/lib/avr/include/util/delay.h **** 		__ticks = (uint16_t)__tmp;
+ 184:/usr/lib/avr/include/util/delay.h **** 	_delay_loop_2(__ticks);
+ 185:/usr/lib/avr/include/util/delay.h **** #endif
+ 186:/usr/lib/avr/include/util/delay.h **** }
+ 187:/usr/lib/avr/include/util/delay.h **** 
+ 188:/usr/lib/avr/include/util/delay.h **** /**
+ 189:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 190:/usr/lib/avr/include/util/delay.h **** 
+ 191:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __us microseconds, using _delay_loop_1().
+ 192:/usr/lib/avr/include/util/delay.h **** 
+ 193:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 194:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 195:/usr/lib/avr/include/util/delay.h **** 
+ 196:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 768 us / F_CPU in MHz.
+ 197:/usr/lib/avr/include/util/delay.h **** 
+ 198:/usr/lib/avr/include/util/delay.h ****    If the user requests a delay greater than the maximal possible one,
+ 199:/usr/lib/avr/include/util/delay.h ****    _delay_us() will automatically call _delay_ms() instead.  The user
+ 200:/usr/lib/avr/include/util/delay.h ****    will not be informed about this case.
+ 201:/usr/lib/avr/include/util/delay.h **** 
+ 202:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 203:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 us/ F_CPU in MHz. For
+ 204:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflow results in
+ 205:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0us.
+ 206:/usr/lib/avr/include/util/delay.h ****   
+ 207:/usr/lib/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 208:/usr/lib/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 209:/usr/lib/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 210:/usr/lib/avr/include/util/delay.h **** 
+ 211:/usr/lib/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 212:/usr/lib/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 213:/usr/lib/avr/include/util/delay.h ****  
+ 214:/usr/lib/avr/include/util/delay.h ****    Note: The new implementation of _delay_us(double __us) with 
+ 215:/usr/lib/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible.
+ 216:/usr/lib/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 217:/usr/lib/avr/include/util/delay.h ****    Also, the backward compatible
+ 218:/usr/lib/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 219:/usr/lib/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 220:/usr/lib/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 221:/usr/lib/avr/include/util/delay.h **** 
+ 222:/usr/lib/avr/include/util/delay.h ****  */
+ 223:/usr/lib/avr/include/util/delay.h **** void
+ 224:/usr/lib/avr/include/util/delay.h **** _delay_us(double __us)
+ 225:/usr/lib/avr/include/util/delay.h **** {
+ 226:/usr/lib/avr/include/util/delay.h **** 	double __tmp ; 
+ 227:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 228:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 229:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 230:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 231:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 232:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e6) * __us;
+ 233:/usr/lib/avr/include/util/delay.h **** 
+ 234:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 235:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 236:/usr/lib/avr/include/util/delay.h **** 
+ 237:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 238:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 239:/usr/lib/avr/include/util/delay.h **** 
+ 240:/usr/lib/avr/include/util/delay.h **** 	#else
+ 241:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 242:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 243:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 244:/usr/lib/avr/include/util/delay.h **** 
+ 245:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+  73               		.loc 2 245 0
+  74 002a 8AE1      		ldi r24,lo8(26)
+  75 002c 8A95      		1: dec r24
+  76 002e 01F4      		brne 1b
+  77 0030 00C0      		rjmp .
+  78               	.LBE27:
+  79               	.LBE26:
+ 266:ks0108b.c     ****   _delay_us(E_DELAY);
+ 267:ks0108b.c     ****   PORTC |= (1<<EN);        // Set EN (Indicate data ready)
+  80               		.loc 1 267 0
+  81 0032 409A      		sbi 0x8,0
+  82               	.LVL3:
+  83               	.LBB28:
+  84               	.LBB29:
+  85               		.loc 2 245 0
+  86 0034 8AE1      		ldi r24,lo8(26)
+  87 0036 8A95      		1: dec r24
+  88 0038 01F4      		brne 1b
+  89 003a 00C0      		rjmp .
+  90               	.LBE29:
+  91               	.LBE28:
+ 268:ks0108b.c     ****   _delay_us(E_DELAY);
+ 269:ks0108b.c     ****   PORTC &= ~(1 << EN);      // Clear EN (Activate write)
+  92               		.loc 1 269 0
+  93 003c 4098      		cbi 0x8,0
+  94               	.LVL4:
+  95               	.LBB30:
+  96               	.LBB31:
+  97               		.loc 2 245 0
+  98 003e 8AE1      		ldi r24,lo8(26)
+  99 0040 8A95      		1: dec r24
+ 100 0042 01F4      		brne 1b
+ 101 0044 00C0      		rjmp .
+ 102 0046 0895      		ret
+ 103               	.LBE31:
+ 104               	.LBE30:
+ 105               		.cfi_endproc
+ 106               	.LFE17:
+ 108               	.global	setPinsDefault
+ 110               	setPinsDefault:
+ 111               	.LFB18:
+ 270:ks0108b.c     ****   _delay_us(E_DELAY);
+ 271:ks0108b.c     **** }
+ 272:ks0108b.c     **** 
+ 273:ks0108b.c     **** // Everytime we finish up a transfer, we want to reset the pins to a default
+ 274:ks0108b.c     **** //  state. This state is all pins high EXCEPT EN. We want to leave EN low
+ 275:ks0108b.c     **** //  until we need to twiddle it.
+ 276:ks0108b.c     **** void setPinsDefault(void)
+ 277:ks0108b.c     **** {
+ 112               		.loc 1 277 0
+ 113               		.cfi_startproc
+ 114               	/* prologue: function */
+ 115               	/* frame size = 0 */
+ 116               	/* stack size = 0 */
+ 117               	.L__stack_usage = 0
+ 278:ks0108b.c     ****   PORTC |= (  (1<<RS)| 
+ 118               		.loc 1 278 0
+ 119 0048 88B1      		in r24,0x8
+ 120 004a 8663      		ori r24,lo8(54)
+ 121 004c 88B9      		out 0x8,r24
+ 279:ks0108b.c     ****               (1<<CS1)|
+ 280:ks0108b.c     ****               (1<<CS2)|
+ 281:ks0108b.c     ****               (1<<R_W));
+ 282:ks0108b.c     ****   PORTC &= ~(1<<EN);
+ 122               		.loc 1 282 0
+ 123 004e 4098      		cbi 0x8,0
+ 124 0050 0895      		ret
+ 125               		.cfi_endproc
+ 126               	.LFE18:
+ 128               	.global	ks0108bDisplayOn
+ 130               	ks0108bDisplayOn:
+ 131               	.LFB8:
+  56:ks0108b.c     ****   // Data lines should be 0x3F for display enable.
+ 132               		.loc 1 56 0
+ 133               		.cfi_startproc
+ 134               	/* prologue: function */
+ 135               	/* frame size = 0 */
+ 136               	/* stack size = 0 */
+ 137               	.L__stack_usage = 0
+  58:ks0108b.c     ****               (1<<RS));      // Clear RS (Instruction mode)
+ 138               		.loc 1 58 0
+ 139 0052 88B1      		in r24,0x8
+ 140 0054 897F      		andi r24,lo8(-7)
+ 141 0056 88B9      		out 0x8,r24
+  60:ks0108b.c     ****   strobeEN();
+ 142               		.loc 1 60 0
+ 143 0058 8FE3      		ldi r24,lo8(63)
+ 144 005a 0E94 0000 		call setData
+ 145               	.LVL5:
+  61:ks0108b.c     ****   hiZDataPins();     // Avoid bus contention with the ks0108b driver.
+ 146               		.loc 1 61 0
+ 147 005e 0E94 0000 		call strobeEN
+ 148               	.LVL6:
+  62:ks0108b.c     ****   setPinsDefault();
+ 149               		.loc 1 62 0
+ 150 0062 0E94 0000 		call hiZDataPins
+ 151               	.LVL7:
+  63:ks0108b.c     **** }
+ 152               		.loc 1 63 0
+ 153 0066 0C94 0000 		jmp setPinsDefault
+ 154               	.LVL8:
+ 155               		.cfi_endproc
+ 156               	.LFE8:
+ 158               	.global	ks0108bSetStartLine
+ 160               	ks0108bSetStartLine:
+ 161               	.LFB9:
+  70:ks0108b.c     ****   PORTC &= ~( (1<<CS1)| // Let's hit both chips.
+ 162               		.loc 1 70 0
+ 163               		.cfi_startproc
+ 164               	/* prologue: function */
+ 165               	/* frame size = 0 */
+ 166               	/* stack size = 0 */
+ 167               	.L__stack_usage = 0
+  71:ks0108b.c     ****               (1<<CS2)|
+ 168               		.loc 1 71 0
+ 169 006a 88B1      		in r24,0x8
+ 170 006c 897C      		andi r24,lo8(-55)
+ 171 006e 88B9      		out 0x8,r24
+  77:ks0108b.c     ****   strobeEN();
+ 172               		.loc 1 77 0
+ 173 0070 80EC      		ldi r24,lo8(-64)
+ 174 0072 0E94 0000 		call setData
+ 175               	.LVL9:
+  78:ks0108b.c     ****   hiZDataPins();     // Avoid bus contention with the ks0108b driver.
+ 176               		.loc 1 78 0
+ 177 0076 0E94 0000 		call strobeEN
+ 178               	.LVL10:
+  79:ks0108b.c     ****   setPinsDefault();
+ 179               		.loc 1 79 0
+ 180 007a 0E94 0000 		call hiZDataPins
+ 181               	.LVL11:
+  80:ks0108b.c     **** }
+ 182               		.loc 1 80 0
+ 183 007e 0C94 0000 		jmp setPinsDefault
+ 184               	.LVL12:
+ 185               		.cfi_endproc
+ 186               	.LFE9:
+ 188               	.global	ks0108bSetColumn
+ 190               	ks0108bSetColumn:
+ 191               	.LFB10:
+  90:ks0108b.c     ****   PORTC &= ~( (1<<R_W)|
+ 192               		.loc 1 90 0
+ 193               		.cfi_startproc
+ 194               	.LVL13:
+ 195               	/* prologue: function */
+ 196               	/* frame size = 0 */
+ 197               	/* stack size = 0 */
+ 198               	.L__stack_usage = 0
+  91:ks0108b.c     ****               (1<<RS));
+ 199               		.loc 1 91 0
+ 200 0082 98B1      		in r25,0x8
+ 201 0084 997F      		andi r25,lo8(-7)
+ 202 0086 98B9      		out 0x8,r25
+  95:ks0108b.c     ****   address = (address | 0x40) & 0x7F;
+ 203               		.loc 1 95 0
+ 204 0088 8093 0000 		sts column,r24
+  96:ks0108b.c     ****   setData(address);
+ 205               		.loc 1 96 0
+ 206 008c 8F73      		andi r24,lo8(63)
+ 207               	.LVL14:
+  97:ks0108b.c     ****   strobeEN();
+ 208               		.loc 1 97 0
+ 209 008e 8064      		ori r24,lo8(64)
+ 210               	.LVL15:
+ 211 0090 0E94 0000 		call setData
+ 212               	.LVL16:
+  98:ks0108b.c     ****   hiZDataPins();     // Avoid bus contention with the ks0108b driver.
+ 213               		.loc 1 98 0
+ 214 0094 0E94 0000 		call strobeEN
+ 215               	.LVL17:
+  99:ks0108b.c     ****   setPinsDefault();
+ 216               		.loc 1 99 0
+ 217 0098 0E94 0000 		call hiZDataPins
+ 218               	.LVL18:
+ 100:ks0108b.c     **** }
+ 219               		.loc 1 100 0
+ 220 009c 0C94 0000 		jmp setPinsDefault
+ 221               	.LVL19:
+ 222               		.cfi_endproc
+ 223               	.LFE10:
+ 225               	.global	ks0108bSetPage
+ 227               	ks0108bSetPage:
+ 228               	.LFB11:
+ 107:ks0108b.c     ****   // Now, on to the actual port manipulations needed to make this happen.
+ 229               		.loc 1 107 0
+ 230               		.cfi_startproc
+ 231               	.LVL20:
+ 232               	/* prologue: function */
+ 233               	/* frame size = 0 */
+ 234               	/* stack size = 0 */
+ 235               	.L__stack_usage = 0
+ 109:ks0108b.c     ****               (1<<RS));      // Clear RS (Register select for
+ 236               		.loc 1 109 0
+ 237 00a0 98B1      		in r25,0x8
+ 238 00a2 997F      		andi r25,lo8(-7)
+ 239 00a4 98B9      		out 0x8,r25
+ 114:ks0108b.c     ****   setData(address);
+ 240               		.loc 1 114 0
+ 241 00a6 8770      		andi r24,lo8(7)
+ 242               	.LVL21:
+ 115:ks0108b.c     ****   strobeEN();
+ 243               		.loc 1 115 0
+ 244 00a8 886B      		ori r24,lo8(-72)
+ 245               	.LVL22:
+ 246 00aa 0E94 0000 		call setData
+ 247               	.LVL23:
+ 116:ks0108b.c     ****   hiZDataPins();     // Avoid bus contention with the ks0108b driver.
+ 248               		.loc 1 116 0
+ 249 00ae 0E94 0000 		call strobeEN
+ 250               	.LVL24:
+ 117:ks0108b.c     ****   setPinsDefault();
+ 251               		.loc 1 117 0
+ 252 00b2 0E94 0000 		call hiZDataPins
+ 253               	.LVL25:
+ 118:ks0108b.c     **** }
+ 254               		.loc 1 118 0
+ 255 00b6 0C94 0000 		jmp setPinsDefault
+ 256               	.LVL26:
+ 257               		.cfi_endproc
+ 258               	.LFE11:
+ 260               	.global	ks0108bWriteData
+ 262               	ks0108bWriteData:
+ 263               	.LFB12:
+ 124:ks0108b.c     ****   // By tracking what column we're writing to, we can avoid having to
+ 264               		.loc 1 124 0
+ 265               		.cfi_startproc
+ 266               	.LVL27:
+ 267               	/* prologue: function */
+ 268               	/* frame size = 0 */
+ 269               	/* stack size = 0 */
+ 270               	.L__stack_usage = 0
+ 128:ks0108b.c     ****                                  (1<<R_W));
+ 271               		.loc 1 128 0
+ 272 00ba 9091 0000 		lds r25,column
+ 273 00be 9034      		cpi r25,lo8(64)
+ 274 00c0 00F4      		brsh .L9
+ 128:ks0108b.c     ****                                  (1<<R_W));
+ 275               		.loc 1 128 0 is_stmt 0 discriminator 1
+ 276 00c2 98B1      		in r25,0x8
+ 277 00c4 9B7E      		andi r25,lo8(-21)
+ 278 00c6 00C0      		rjmp .L14
+ 279               	.L9:
+ 130:ks0108b.c     ****                                  (1<<R_W));
+ 280               		.loc 1 130 0 is_stmt 1
+ 281 00c8 98B1      		in r25,0x8
+ 282 00ca 9B7D      		andi r25,lo8(-37)
+ 283               	.L14:
+ 284 00cc 98B9      		out 0x8,r25
+ 135:ks0108b.c     ****   
+ 285               		.loc 1 135 0
+ 286 00ce 0E94 0000 		call setData
+ 287               	.LVL28:
+ 137:ks0108b.c     ****   hiZDataPins();     // Avoid bus contention with the ks0108b driver.
+ 288               		.loc 1 137 0
+ 289 00d2 0E94 0000 		call strobeEN
+ 290               	.LVL29:
+ 138:ks0108b.c     ****   setPinsDefault();
+ 291               		.loc 1 138 0
+ 292 00d6 0E94 0000 		call hiZDataPins
+ 293               	.LVL30:
+ 139:ks0108b.c     ****   // The act of writing a data byte to the display causes the display's
+ 294               		.loc 1 139 0
+ 295 00da 0E94 0000 		call setPinsDefault
+ 296               	.LVL31:
+ 146:ks0108b.c     ****   {
+ 297               		.loc 1 146 0
+ 298 00de 8091 0000 		lds r24,column
+ 299 00e2 8F5F      		subi r24,lo8(-(1))
+ 300 00e4 87FD      		sbrc r24,7
+ 301 00e6 00C0      		rjmp .L11
+ 302 00e8 8093 0000 		sts column,r24
+ 303 00ec 0895      		ret
+ 304               	.L11:
+ 305               	.LVL32:
+ 306               	.LBB34:
+ 307               	.LBB35:
+ 148:ks0108b.c     ****     ks0108bSetColumn(0);
+ 308               		.loc 1 148 0
+ 309 00ee 1092 0000 		sts column,__zero_reg__
+ 149:ks0108b.c     ****   }
+ 310               		.loc 1 149 0
+ 311 00f2 80E0      		ldi r24,0
+ 312 00f4 0C94 0000 		jmp ks0108bSetColumn
+ 313               	.LVL33:
+ 314               	.LBE35:
+ 315               	.LBE34:
+ 316               		.cfi_endproc
+ 317               	.LFE12:
+ 319               	.global	ks0108bClear
+ 321               	ks0108bClear:
+ 322               	.LFB14:
+ 190:ks0108b.c     ****   uint8_t clearVal = 0;
+ 323               		.loc 1 190 0
+ 324               		.cfi_startproc
+ 325 00f8 1F93      		push r17
+ 326               	.LCFI0:
+ 327               		.cfi_def_cfa_offset 3
+ 328               		.cfi_offset 17, -2
+ 329 00fa CF93      		push r28
+ 330               	.LCFI1:
+ 331               		.cfi_def_cfa_offset 4
+ 332               		.cfi_offset 28, -3
+ 333 00fc DF93      		push r29
+ 334               	.LCFI2:
+ 335               		.cfi_def_cfa_offset 5
+ 336               		.cfi_offset 29, -4
+ 337               	/* prologue: function */
+ 338               	/* frame size = 0 */
+ 339               	/* stack size = 3 */
+ 340               	.L__stack_usage = 3
+ 341               	.LVL34:
+ 192:ks0108b.c     ****   for (uint8_t y = 0; y<8; y++)
+ 342               		.loc 1 192 0
+ 343 00fe 9091 0000 		lds r25,reverse
+ 344 0102 81E0      		ldi r24,lo8(1)
+ 345 0104 9130      		cpi r25,lo8(1)
+ 346 0106 01F0      		breq .L17
+ 347 0108 80E0      		ldi r24,0
+ 348               	.L17:
+ 349 010a 182F      		mov r17,r24
+ 350 010c 1195      		neg r17
+ 351               	.LVL35:
+ 352               	.LBB36:
+ 193:ks0108b.c     ****   {
+ 353               		.loc 1 193 0
+ 354 010e C0E0      		ldi r28,0
+ 355               	.LVL36:
+ 356               	.L21:
+ 195:ks0108b.c     ****     ks0108bSetColumn(0);
+ 357               		.loc 1 195 0
+ 358 0110 8C2F      		mov r24,r28
+ 359 0112 0E94 0000 		call ks0108bSetPage
+ 360               	.LVL37:
+ 196:ks0108b.c     ****     for (uint8_t x = 0; x<128; x++)
+ 361               		.loc 1 196 0
+ 362 0116 80E0      		ldi r24,0
+ 363 0118 0E94 0000 		call ks0108bSetColumn
+ 364               	.LVL38:
+ 365               	.LBB37:
+ 197:ks0108b.c     ****     {
+ 366               		.loc 1 197 0
+ 367 011c D0E0      		ldi r29,0
+ 368               	.LVL39:
+ 369               	.L18:
+ 199:ks0108b.c     ****     }
+ 370               		.loc 1 199 0 discriminator 2
+ 371 011e 812F      		mov r24,r17
+ 372 0120 0E94 0000 		call ks0108bWriteData
+ 373               	.LVL40:
+ 197:ks0108b.c     ****     {
+ 374               		.loc 1 197 0 discriminator 2
+ 375 0124 DF5F      		subi r29,lo8(-(1))
+ 376               	.LVL41:
+ 377 0126 D038      		cpi r29,lo8(-128)
+ 378 0128 01F4      		brne .L18
+ 379               	.LBE37:
+ 193:ks0108b.c     ****   {
+ 380               		.loc 1 193 0
+ 381 012a CF5F      		subi r28,lo8(-(1))
+ 382               	.LVL42:
+ 383 012c C830      		cpi r28,lo8(8)
+ 384 012e 01F4      		brne .L21
+ 385               	.LBE36:
+ 202:ks0108b.c     ****   ks0108bSetColumn(0);
+ 386               		.loc 1 202 0
+ 387 0130 80E0      		ldi r24,0
+ 388 0132 0E94 0000 		call ks0108bSetPage
+ 389               	.LVL43:
+ 203:ks0108b.c     **** }
+ 390               		.loc 1 203 0
+ 391 0136 80E0      		ldi r24,0
+ 392               	/* epilogue start */
+ 204:ks0108b.c     **** 
+ 393               		.loc 1 204 0
+ 394 0138 DF91      		pop r29
+ 395               	.LVL44:
+ 396 013a CF91      		pop r28
+ 397               	.LVL45:
+ 398 013c 1F91      		pop r17
+ 399               	.LVL46:
+ 203:ks0108b.c     **** }
+ 400               		.loc 1 203 0
+ 401 013e 0C94 0000 		jmp ks0108bSetColumn
+ 402               	.LVL47:
+ 403               		.cfi_endproc
+ 404               	.LFE14:
+ 406               	.global	ks0108bReadData
+ 408               	ks0108bReadData:
+ 409               	.LFB13:
+ 161:ks0108b.c     ****   uint8_t data;
+ 410               		.loc 1 161 0
+ 411               		.cfi_startproc
+ 412               	.LVL48:
+ 413 0142 CF93      		push r28
+ 414               	.LCFI3:
+ 415               		.cfi_def_cfa_offset 3
+ 416               		.cfi_offset 28, -2
+ 417 0144 DF93      		push r29
+ 418               	.LCFI4:
+ 419               		.cfi_def_cfa_offset 4
+ 420               		.cfi_offset 29, -3
+ 421 0146 1F92      		push __zero_reg__
+ 422               	.LCFI5:
+ 423               		.cfi_def_cfa_offset 5
+ 424 0148 CDB7      		in r28,__SP_L__
+ 425 014a DEB7      		in r29,__SP_H__
+ 426               	.LCFI6:
+ 427               		.cfi_def_cfa_register 28
+ 428               	/* prologue: function */
+ 429               	/* frame size = 1 */
+ 430               	/* stack size = 3 */
+ 431               	.L__stack_usage = 3
+ 164:ks0108b.c     ****   {  
+ 432               		.loc 1 164 0
+ 433 014c 8034      		cpi r24,lo8(64)
+ 434 014e 00F4      		brsh .L26
+ 166:ks0108b.c     ****   }
+ 435               		.loc 1 166 0
+ 436 0150 4498      		cbi 0x8,4
+ 437 0152 00C0      		rjmp .L27
+ 438               	.L26:
+ 170:ks0108b.c     ****   }
+ 439               		.loc 1 170 0
+ 440 0154 4598      		cbi 0x8,5
+ 441               	.L27:
+ 442               	.LVL49:
+ 443               	.LBB38:
+ 444               	.LBB39:
+ 445               		.loc 2 245 0
+ 446 0156 85E3      		ldi r24,lo8(53)
+ 447 0158 8A95      		1: dec r24
+ 448 015a 01F4      		brne 1b
+ 449               	.LVL50:
+ 450 015c 0000      		nop
+ 451               	.LBE39:
+ 452               	.LBE38:
+ 175:ks0108b.c     ****   _delay_us(R_DELAY);
+ 453               		.loc 1 175 0
+ 454 015e 409A      		sbi 0x8,0
+ 455               	.LVL51:
+ 456               	.LBB40:
+ 457               	.LBB41:
+ 458               		.loc 2 245 0
+ 459 0160 95E3      		ldi r25,lo8(53)
+ 460 0162 9A95      		1: dec r25
+ 461 0164 01F4      		brne 1b
+ 462 0166 0000      		nop
+ 463               	.LBE41:
+ 464               	.LBE40:
+ 177:ks0108b.c     ****   _delay_us(R_DELAY);
+ 465               		.loc 1 177 0
+ 466 0168 4098      		cbi 0x8,0
+ 467               	.LVL52:
+ 468               	.LBB42:
+ 469               	.LBB43:
+ 470               		.loc 2 245 0
+ 471 016a E5E3      		ldi r30,lo8(53)
+ 472 016c EA95      		1: dec r30
+ 473 016e 01F4      		brne 1b
+ 474 0170 0000      		nop
+ 475               	.LBE43:
+ 476               	.LBE42:
+ 179:ks0108b.c     ****   _delay_us(R_DELAY);
+ 477               		.loc 1 179 0
+ 478 0172 409A      		sbi 0x8,0
+ 479               	.LVL53:
+ 480               	.LBB44:
+ 481               	.LBB45:
+ 482               		.loc 2 245 0
+ 483 0174 F5E3      		ldi r31,lo8(53)
+ 484 0176 FA95      		1: dec r31
+ 485 0178 01F4      		brne 1b
+ 486 017a 0000      		nop
+ 487               	.LBE45:
+ 488               	.LBE44:
+ 181:ks0108b.c     ****   PORTC &= ~(1<<EN);
+ 489               		.loc 1 181 0
+ 490 017c 0E94 0000 		call readData
+ 491               	.LVL54:
+ 182:ks0108b.c     ****   _delay_us(R_DELAY);
+ 492               		.loc 1 182 0
+ 493 0180 4098      		cbi 0x8,0
+ 494               	.LVL55:
+ 495               	.LBB46:
+ 496               	.LBB47:
+ 497               		.loc 2 245 0
+ 498 0182 95E3      		ldi r25,lo8(53)
+ 499 0184 9A95      		1: dec r25
+ 500 0186 01F4      		brne 1b
+ 501 0188 0000      		nop
+ 502               	.LBE47:
+ 503               	.LBE46:
+ 184:ks0108b.c     ****   return data;
+ 504               		.loc 1 184 0
+ 505 018a 8983      		std Y+1,r24
+ 506 018c 0E94 0000 		call setPinsDefault
+ 507               	.LVL56:
+ 186:ks0108b.c     **** 
+ 508               		.loc 1 186 0
+ 509 0190 8981      		ldd r24,Y+1
+ 510               	/* epilogue start */
+ 511 0192 0F90      		pop __tmp_reg__
+ 512 0194 DF91      		pop r29
+ 513 0196 CF91      		pop r28
+ 514 0198 0895      		ret
+ 515               		.cfi_endproc
+ 516               	.LFE13:
+ 518               	.global	ks0108bReadBlock
+ 520               	ks0108bReadBlock:
+ 521               	.LFB15:
+ 210:ks0108b.c     ****   uint8_t firstRowPixels, secondRowPixels;
+ 522               		.loc 1 210 0
+ 523               		.cfi_startproc
+ 524               	.LVL57:
+ 525 019a 9F92      		push r9
+ 526               	.LCFI7:
+ 527               		.cfi_def_cfa_offset 3
+ 528               		.cfi_offset 9, -2
+ 529 019c AF92      		push r10
+ 530               	.LCFI8:
+ 531               		.cfi_def_cfa_offset 4
+ 532               		.cfi_offset 10, -3
+ 533 019e BF92      		push r11
+ 534               	.LCFI9:
+ 535               		.cfi_def_cfa_offset 5
+ 536               		.cfi_offset 11, -4
+ 537 01a0 CF92      		push r12
+ 538               	.LCFI10:
+ 539               		.cfi_def_cfa_offset 6
+ 540               		.cfi_offset 12, -5
+ 541 01a2 DF92      		push r13
+ 542               	.LCFI11:
+ 543               		.cfi_def_cfa_offset 7
+ 544               		.cfi_offset 13, -6
+ 545 01a4 EF92      		push r14
+ 546               	.LCFI12:
+ 547               		.cfi_def_cfa_offset 8
+ 548               		.cfi_offset 14, -7
+ 549 01a6 FF92      		push r15
+ 550               	.LCFI13:
+ 551               		.cfi_def_cfa_offset 9
+ 552               		.cfi_offset 15, -8
+ 553 01a8 0F93      		push r16
+ 554               	.LCFI14:
+ 555               		.cfi_def_cfa_offset 10
+ 556               		.cfi_offset 16, -9
+ 557 01aa 1F93      		push r17
+ 558               	.LCFI15:
+ 559               		.cfi_def_cfa_offset 11
+ 560               		.cfi_offset 17, -10
+ 561 01ac CF93      		push r28
+ 562               	.LCFI16:
+ 563               		.cfi_def_cfa_offset 12
+ 564               		.cfi_offset 28, -11
+ 565 01ae DF93      		push r29
+ 566               	.LCFI17:
+ 567               		.cfi_def_cfa_offset 13
+ 568               		.cfi_offset 29, -12
+ 569               	/* prologue: function */
+ 570               	/* frame size = 0 */
+ 571               	/* stack size = 11 */
+ 572               	.L__stack_usage = 11
+ 573 01b0 D82E      		mov r13,r24
+ 574 01b2 B42E      		mov r11,r20
+ 575 01b4 C52E      		mov r12,r21
+ 214:ks0108b.c     ****   secondRowPixels = 8 - (y%8);
+ 576               		.loc 1 214 0
+ 577 01b6 862F      		mov r24,r22
+ 578               	.LVL58:
+ 579 01b8 8770      		andi r24,lo8(7)
+ 580 01ba 982E      		mov r9,r24
+ 581               	.LVL59:
+ 215:ks0108b.c     ****   // Okay, now we know how many pixels are in each row. Now let's pull the
+ 582               		.loc 1 215 0
+ 583 01bc 88E0      		ldi r24,lo8(8)
+ 584 01be E82E      		mov r14,r24
+ 585 01c0 E918      		sub r14,r9
+ 586               	.LVL60:
+ 218:ks0108b.c     ****   for (uint8_t i = 0; i<8; i++)
+ 587               		.loc 1 218 0
+ 588 01c2 A62E      		mov r10,r22
+ 589 01c4 A694      		lsr r10
+ 590 01c6 A694      		lsr r10
+ 591 01c8 A694      		lsr r10
+ 592 01ca 8A2D      		mov r24,r10
+ 593 01cc 0E94 0000 		call ks0108bSetPage
+ 594               	.LVL61:
+ 595 01d0 CB2D      		mov r28,r11
+ 596 01d2 DC2D      		mov r29,r12
+ 597               	.LBB48:
+ 219:ks0108b.c     ****   {
+ 598               		.loc 1 219 0
+ 599 01d4 F12C      		mov r15,__zero_reg__
+ 223:ks0108b.c     ****   }
+ 600               		.loc 1 223 0
+ 601 01d6 08E0      		ldi r16,lo8(8)
+ 602 01d8 10E0      		ldi r17,0
+ 603 01da 0919      		sub r16,r9
+ 604 01dc 1109      		sbc r17,__zero_reg__
+ 605               	.LVL62:
+ 606               	.L30:
+ 223:ks0108b.c     ****   }
+ 607               		.loc 1 223 0 is_stmt 0 discriminator 2
+ 608 01de 8F2D      		mov r24,r15
+ 609 01e0 8D0D      		add r24,r13
+ 610 01e2 0E94 0000 		call ks0108bReadData
+ 611               	.LVL63:
+ 612 01e6 002E      		mov r0,r16
+ 613 01e8 00C0      		rjmp 2f
+ 614               		1:
+ 615 01ea 880F      		lsl r24
+ 616               		2:
+ 617 01ec 0A94      		dec r0
+ 618 01ee 02F4      		brpl 1b
+ 619 01f0 8993      		st Y+,r24
+ 219:ks0108b.c     ****   {
+ 620               		.loc 1 219 0 is_stmt 1 discriminator 2
+ 621 01f2 F394      		inc r15
+ 622               	.LVL64:
+ 623 01f4 88E0      		ldi r24,lo8(8)
+ 624 01f6 F812      		cpse r15,r24
+ 625 01f8 00C0      		rjmp .L30
+ 626               	.LBE48:
+ 225:ks0108b.c     ****   for (uint8_t i = 0; i<8; i++)
+ 627               		.loc 1 225 0
+ 628 01fa 81E0      		ldi r24,lo8(1)
+ 629 01fc 8A0D      		add r24,r10
+ 630 01fe 0E94 0000 		call ks0108bSetPage
+ 631               	.LVL65:
+ 632 0202 CB2D      		mov r28,r11
+ 633 0204 DC2D      		mov r29,r12
+ 634               	.LBB49:
+ 226:ks0108b.c     ****   {
+ 635               		.loc 1 226 0
+ 636 0206 F12C      		mov r15,__zero_reg__
+ 637               	.LVL66:
+ 228:ks0108b.c     ****   }
+ 638               		.loc 1 228 0
+ 639 0208 08E0      		ldi r16,lo8(8)
+ 640 020a 10E0      		ldi r17,0
+ 641 020c 0E19      		sub r16,r14
+ 642 020e 1109      		sbc r17,__zero_reg__
+ 643               	.LVL67:
+ 644               	.L32:
+ 228:ks0108b.c     ****   }
+ 645               		.loc 1 228 0 is_stmt 0 discriminator 2
+ 646 0210 E880      		ld r14,Y
+ 647 0212 8F2D      		mov r24,r15
+ 648 0214 8D0D      		add r24,r13
+ 649 0216 0E94 0000 		call ks0108bReadData
+ 650               	.LVL68:
+ 651 021a 282F      		mov r18,r24
+ 652 021c 30E0      		ldi r19,0
+ 653 021e 002E      		mov r0,r16
+ 654 0220 00C0      		rjmp 2f
+ 655               		1:
+ 656 0222 3595      		asr r19
+ 657 0224 2795      		ror r18
+ 658               		2:
+ 659 0226 0A94      		dec r0
+ 660 0228 02F4      		brpl 1b
+ 661 022a 2E29      		or r18,r14
+ 662 022c 2993      		st Y+,r18
+ 226:ks0108b.c     ****   {
+ 663               		.loc 1 226 0 is_stmt 1 discriminator 2
+ 664 022e F394      		inc r15
+ 665               	.LVL69:
+ 666 0230 88E0      		ldi r24,lo8(8)
+ 667               	.LVL70:
+ 668 0232 F812      		cpse r15,r24
+ 669 0234 00C0      		rjmp .L32
+ 670               	/* epilogue start */
+ 671               	.LBE49:
+ 230:ks0108b.c     **** 
+ 672               		.loc 1 230 0
+ 673 0236 DF91      		pop r29
+ 674 0238 CF91      		pop r28
+ 675 023a 1F91      		pop r17
+ 676 023c 0F91      		pop r16
+ 677 023e FF90      		pop r15
+ 678               	.LVL71:
+ 679 0240 EF90      		pop r14
+ 680 0242 DF90      		pop r13
+ 681               	.LVL72:
+ 682 0244 CF90      		pop r12
+ 683 0246 BF90      		pop r11
+ 684 0248 AF90      		pop r10
+ 685 024a 9F90      		pop r9
+ 686               	.LVL73:
+ 687 024c 0895      		ret
+ 688               		.cfi_endproc
+ 689               	.LFE15:
+ 691               	.global	ks0108bDrawPixel
+ 693               	ks0108bDrawPixel:
+ 694               	.LFB16:
+ 237:ks0108b.c     ****   ks0108bSetColumn(x);  // x is simple; it's just the x coordinate.
+ 695               		.loc 1 237 0
+ 696               		.cfi_startproc
+ 697               	.LVL74:
+ 698 024e 0F93      		push r16
+ 699               	.LCFI18:
+ 700               		.cfi_def_cfa_offset 3
+ 701               		.cfi_offset 16, -2
+ 702 0250 1F93      		push r17
+ 703               	.LCFI19:
+ 704               		.cfi_def_cfa_offset 4
+ 705               		.cfi_offset 17, -3
+ 706 0252 CF93      		push r28
+ 707               	.LCFI20:
+ 708               		.cfi_def_cfa_offset 5
+ 709               		.cfi_offset 28, -4
+ 710 0254 DF93      		push r29
+ 711               	.LCFI21:
+ 712               		.cfi_def_cfa_offset 6
+ 713               		.cfi_offset 29, -5
+ 714 0256 1F92      		push __zero_reg__
+ 715               	.LCFI22:
+ 716               		.cfi_def_cfa_offset 7
+ 717 0258 CDB7      		in r28,__SP_L__
+ 718 025a DEB7      		in r29,__SP_H__
+ 719               	.LCFI23:
+ 720               		.cfi_def_cfa_register 28
+ 721               	/* prologue: function */
+ 722               	/* frame size = 1 */
+ 723               	/* stack size = 5 */
+ 724               	.L__stack_usage = 5
+ 725 025c 182F      		mov r17,r24
+ 726 025e 062F      		mov r16,r22
+ 238:ks0108b.c     ****   ks0108bSetPage(y/8);  // y is less simple; we need to find the page that the
+ 727               		.loc 1 238 0
+ 728 0260 4983      		std Y+1,r20
+ 729 0262 0E94 0000 		call ks0108bSetColumn
+ 730               	.LVL75:
+ 239:ks0108b.c     ****                         //  pixel in question resides on.
+ 731               		.loc 1 239 0
+ 732 0266 802F      		mov r24,r16
+ 733 0268 8695      		lsr r24
+ 734 026a 8695      		lsr r24
+ 735 026c 8695      		lsr r24
+ 736 026e 0E94 0000 		call ks0108bSetPage
+ 737               	.LVL76:
+ 241:ks0108b.c     ****   uint8_t pixelToWrite = (y%8);  // determine which pixel to write
+ 738               		.loc 1 241 0
+ 739 0272 812F      		mov r24,r17
+ 740 0274 0E94 0000 		call ks0108bReadData
+ 741               	.LVL77:
+ 742 0278 982F      		mov r25,r24
+ 743               	.LVL78:
+ 242:ks0108b.c     ****   // This section handles the specifics- do we want to turn the pixel on or
+ 744               		.loc 1 242 0
+ 745 027a 602F      		mov r22,r16
+ 746 027c 6770      		andi r22,lo8(7)
+ 747               	.LVL79:
+ 246:ks0108b.c     ****   {
+ 748               		.loc 1 246 0
+ 749 027e 8091 0000 		lds r24,reverse
+ 750               	.LVL80:
+ 751 0282 4981      		ldd r20,Y+1
+ 248:ks0108b.c     ****     else       currentPixelData &= ~(1<<pixelToWrite);
+ 752               		.loc 1 248 0
+ 753 0284 21E0      		ldi r18,lo8(1)
+ 754 0286 30E0      		ldi r19,0
+ 755 0288 062E      		mov r0,r22
+ 756 028a 00C0      		rjmp 2f
+ 757               		1:
+ 758 028c 220F      		lsl r18
+ 759               		2:
+ 760 028e 0A94      		dec r0
+ 761 0290 02F4      		brpl 1b
+ 246:ks0108b.c     ****   {
+ 762               		.loc 1 246 0
+ 763 0292 8111      		cpse r24,__zero_reg__
+ 764 0294 00C0      		rjmp .L34
+ 248:ks0108b.c     ****     else       currentPixelData &= ~(1<<pixelToWrite);
+ 765               		.loc 1 248 0
+ 766 0296 4111      		cpse r20,__zero_reg__
+ 767 0298 00C0      		rjmp .L37
+ 768 029a 00C0      		rjmp .L38
+ 769               	.L34:
+ 253:ks0108b.c     ****     else       currentPixelData &= ~(1<<pixelToWrite);
+ 770               		.loc 1 253 0
+ 771 029c 4130      		cpi r20,lo8(1)
+ 772 029e 01F4      		brne .L37
+ 773               	.L38:
+ 253:ks0108b.c     ****     else       currentPixelData &= ~(1<<pixelToWrite);
+ 774               		.loc 1 253 0 is_stmt 0 discriminator 1
+ 775 02a0 292B      		or r18,r25
+ 776               	.LVL81:
+ 777 02a2 00C0      		rjmp .L36
+ 778               	.LVL82:
+ 779               	.L37:
+ 254:ks0108b.c     ****   }
+ 780               		.loc 1 254 0 is_stmt 1
+ 781 02a4 2095      		com r18
+ 782 02a6 2923      		and r18,r25
+ 783               	.LVL83:
+ 784               	.L36:
+ 258:ks0108b.c     ****   ks0108bWriteData(currentPixelData);
+ 785               		.loc 1 258 0
+ 786 02a8 812F      		mov r24,r17
+ 787 02aa 2983      		std Y+1,r18
+ 788 02ac 0E94 0000 		call ks0108bSetColumn
+ 789               	.LVL84:
+ 259:ks0108b.c     **** }
+ 790               		.loc 1 259 0
+ 791 02b0 2981      		ldd r18,Y+1
+ 792 02b2 822F      		mov r24,r18
+ 793               	/* epilogue start */
+ 260:ks0108b.c     **** 
+ 794               		.loc 1 260 0
+ 795 02b4 0F90      		pop __tmp_reg__
+ 796 02b6 DF91      		pop r29
+ 797 02b8 CF91      		pop r28
+ 798 02ba 1F91      		pop r17
+ 799               	.LVL85:
+ 800 02bc 0F91      		pop r16
+ 801               	.LVL86:
+ 259:ks0108b.c     **** }
+ 802               		.loc 1 259 0
+ 803 02be 0C94 0000 		jmp ks0108bWriteData
+ 804               	.LVL87:
+ 805               		.cfi_endproc
+ 806               	.LFE16:
+ 808               	.global	column
+ 809               		.section .bss
+ 812               	column:
+ 813 0000 00        		.zero	1
+ 814               		.text
+ 815               	.Letext0:
+ 816               		.file 3 "/usr/lib/avr/include/stdint.h"
+ 817               		.file 4 "glcdbp.h"
+ 818               		.file 5 "lcd.h"
+ 819               		.file 6 "io_support.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 ks0108b.c
+     /tmp/ccis64jJ.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccis64jJ.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccis64jJ.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccis64jJ.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccis64jJ.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccis64jJ.s:12     .text:0000000000000000 ks0108bReset
+     /tmp/ccis64jJ.s:62     .text:000000000000002a strobeEN
+     /tmp/ccis64jJ.s:110    .text:0000000000000048 setPinsDefault
+     /tmp/ccis64jJ.s:130    .text:0000000000000052 ks0108bDisplayOn
+     /tmp/ccis64jJ.s:160    .text:000000000000006a ks0108bSetStartLine
+     /tmp/ccis64jJ.s:190    .text:0000000000000082 ks0108bSetColumn
+     /tmp/ccis64jJ.s:812    .bss:0000000000000000 column
+     /tmp/ccis64jJ.s:227    .text:00000000000000a0 ks0108bSetPage
+     /tmp/ccis64jJ.s:262    .text:00000000000000ba ks0108bWriteData
+     /tmp/ccis64jJ.s:321    .text:00000000000000f8 ks0108bClear
+     /tmp/ccis64jJ.s:408    .text:0000000000000142 ks0108bReadData
+     /tmp/ccis64jJ.s:520    .text:000000000000019a ks0108bReadBlock
+     /tmp/ccis64jJ.s:693    .text:000000000000024e ks0108bDrawPixel
+
+UNDEFINED SYMBOLS
+setData
+hiZDataPins
+reverse
+readData
+__do_clear_bss

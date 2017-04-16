@@ -1,0 +1,279 @@
+   1               		.file	"nvm.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	toggleSplash
+  12               	toggleSplash:
+  13               	.LFB0:
+  14               		.file 1 "nvm.c"
+   1:nvm.c         **** /***************************************************************************
+   2:nvm.c         **** nvm.c
+   3:nvm.c         **** 
+   4:nvm.c         **** Non-volatile memory file for the serial graphical LCD backpack project.
+   5:nvm.c         ****  This file provides the functions needed to set and get the sticky settings
+   6:nvm.c         ****  from EEPROM.
+   7:nvm.c         **** 
+   8:nvm.c         **** 02 May 2013 - Mike Hord, SparkFun Electronics
+   9:nvm.c         **** 
+  10:nvm.c         **** This code is released under the Creative Commons Attribution Share-Alike 3.0
+  11:nvm.c         ****  license. You are free to reuse, remix, or redistribute it as you see fit,
+  12:nvm.c         ****  so long as you provide attribution to SparkFun Electronics.
+  13:nvm.c         **** 
+  14:nvm.c         **** ***************************************************************************/
+  15:nvm.c         **** 
+  16:nvm.c         **** #include <avr/eeprom.h>
+  17:nvm.c         **** #include "nvm.h"
+  18:nvm.c         **** 
+  19:nvm.c         **** // Important note: on factory/post-programming reset, all EEPROM locations
+  20:nvm.c         **** //  initialize to 0xff. I didn't want to put in some kind of "first boot"
+  21:nvm.c         **** //  key, so there's some logic to handle, as transparently as possible, the
+  22:nvm.c         **** //  fact of the default values.
+  23:nvm.c         **** 
+  24:nvm.c         **** // Toggle the splash display mode. Default is ON. Only the LSb of the byte
+  25:nvm.c         **** //  is actually checked. Since default mode is ON, and that equates to a '1'
+  26:nvm.c         **** //  in the LSb, we're okay just reading and writing things as they are.
+  27:nvm.c         **** void toggleSplash(void)
+  28:nvm.c         **** {
+  15               		.loc 1 28 0
+  16               		.cfi_startproc
+  17               	/* prologue: function */
+  18               	/* frame size = 0 */
+  19               	/* stack size = 0 */
+  20               	.L__stack_usage = 0
+  29:nvm.c         ****   uint8_t temp = eeprom_read_byte((const uint8_t *)SPLASH);
+  21               		.loc 1 29 0
+  22 0000 80E0      		ldi r24,0
+  23 0002 90E0      		ldi r25,0
+  24 0004 0E94 0000 		call __eerd_byte_m168
+  25               	.LVL0:
+  30:nvm.c         ****   temp ^= 0x01;
+  26               		.loc 1 30 0
+  27 0008 61E0      		ldi r22,lo8(1)
+  28 000a 6827      		eor r22,r24
+  29               	.LVL1:
+  31:nvm.c         ****   eeprom_write_byte((uint8_t *)SPLASH, temp);
+  30               		.loc 1 31 0
+  31 000c 80E0      		ldi r24,0
+  32 000e 90E0      		ldi r25,0
+  33 0010 0C94 0000 		jmp __eewr_byte_m168
+  34               	.LVL2:
+  35               		.cfi_endproc
+  36               	.LFE0:
+  38               	.global	getSplash
+  40               	getSplash:
+  41               	.LFB1:
+  32:nvm.c         **** }
+  33:nvm.c         **** 
+  34:nvm.c         **** uint8_t getSplash(void)
+  35:nvm.c         **** {
+  42               		.loc 1 35 0
+  43               		.cfi_startproc
+  44               	/* prologue: function */
+  45               	/* frame size = 0 */
+  46               	/* stack size = 0 */
+  47               	.L__stack_usage = 0
+  36:nvm.c         ****   return eeprom_read_byte((const uint8_t *)SPLASH);
+  48               		.loc 1 36 0
+  49 0014 80E0      		ldi r24,0
+  50 0016 90E0      		ldi r25,0
+  51 0018 0C94 0000 		jmp __eerd_byte_m168
+  52               	.LVL3:
+  53               		.cfi_endproc
+  54               	.LFE1:
+  56               	.global	toggleReverse
+  58               	toggleReverse:
+  59               	.LFB2:
+  37:nvm.c         **** }
+  38:nvm.c         **** 
+  39:nvm.c         **** // Toggle reverse mode (that is to say, whether the background of the display
+  40:nvm.c         **** //  consists of pixels that are "on" (reverse == 1) or "off" (reverse == 0).
+  41:nvm.c         **** //  Default should be off; that's what we're *used* to seeing. To achieve that,
+  42:nvm.c         **** //  the value stored in bit 0 of the EEPROM location is the complement of the
+  43:nvm.c         **** //  actual value, i.e., a '0' in the LSb indicates that reverse mode will be
+  44:nvm.c         **** //  enabled on power up, and vice versa.
+  45:nvm.c         **** void toggleReverse(void)
+  46:nvm.c         **** {
+  60               		.loc 1 46 0
+  61               		.cfi_startproc
+  62               	/* prologue: function */
+  63               	/* frame size = 0 */
+  64               	/* stack size = 0 */
+  65               	.L__stack_usage = 0
+  47:nvm.c         ****   uint8_t temp = 0x01 & eeprom_read_byte((const uint8_t *)REVERSE);
+  66               		.loc 1 47 0
+  67 001c 81E0      		ldi r24,lo8(1)
+  68 001e 90E0      		ldi r25,0
+  69 0020 0E94 0000 		call __eerd_byte_m168
+  70               	.LVL4:
+  48:nvm.c         ****   temp ^= 0x01;
+  71               		.loc 1 48 0
+  72 0024 682F      		mov r22,r24
+  73 0026 6095      		com r22
+  74 0028 6170      		andi r22,lo8(1)
+  75               	.LVL5:
+  49:nvm.c         ****   eeprom_write_byte((uint8_t *)REVERSE, temp);
+  76               		.loc 1 49 0
+  77 002a 81E0      		ldi r24,lo8(1)
+  78 002c 90E0      		ldi r25,0
+  79 002e 0C94 0000 		jmp __eewr_byte_m168
+  80               	.LVL6:
+  81               		.cfi_endproc
+  82               	.LFE2:
+  84               	.global	getReverse
+  86               	getReverse:
+  87               	.LFB3:
+  50:nvm.c         **** }
+  51:nvm.c         **** 
+  52:nvm.c         **** // By complementing this before we return it, we ensure that the default state
+  53:nvm.c         **** //  of 0xff corresponds to reverse mode OFF.
+  54:nvm.c         **** uint8_t getReverse(void)
+  55:nvm.c         **** {
+  88               		.loc 1 55 0
+  89               		.cfi_startproc
+  90               	/* prologue: function */
+  91               	/* frame size = 0 */
+  92               	/* stack size = 0 */
+  93               	.L__stack_usage = 0
+  56:nvm.c         ****   return ~eeprom_read_byte((const uint8_t *)REVERSE);
+  94               		.loc 1 56 0
+  95 0032 81E0      		ldi r24,lo8(1)
+  96 0034 90E0      		ldi r25,0
+  97 0036 0E94 0000 		call __eerd_byte_m168
+  98               	.LVL7:
+  57:nvm.c         **** }
+  99               		.loc 1 57 0
+ 100 003a 8095      		com r24
+ 101 003c 0895      		ret
+ 102               		.cfi_endproc
+ 103               	.LFE3:
+ 105               	.global	setBaudRate
+ 107               	setBaudRate:
+ 108               	.LFB4:
+  58:nvm.c         **** 
+  59:nvm.c         **** // We don't want the user to set an invalid baud rate, so we don't allow it.
+  60:nvm.c         **** void setBaudRate(char baudMode)
+  61:nvm.c         **** {
+ 109               		.loc 1 61 0
+ 110               		.cfi_startproc
+ 111               	.LVL8:
+ 112               	/* prologue: function */
+ 113               	/* frame size = 0 */
+ 114               	/* stack size = 0 */
+ 115               	.L__stack_usage = 0
+  62:nvm.c         ****   if (baudMode >= '1' && baudMode <= '6')
+ 116               		.loc 1 62 0
+ 117 003e 9FEC      		ldi r25,lo8(-49)
+ 118 0040 980F      		add r25,r24
+ 119 0042 9630      		cpi r25,lo8(6)
+ 120 0044 00F4      		brsh .L5
+  63:nvm.c         ****     eeprom_write_byte((uint8_t *)BAUDRATE, baudMode);
+ 121               		.loc 1 63 0
+ 122 0046 682F      		mov r22,r24
+ 123 0048 82E0      		ldi r24,lo8(2)
+ 124 004a 90E0      		ldi r25,0
+ 125               	.LVL9:
+ 126 004c 0C94 0000 		jmp __eewr_byte_m168
+ 127               	.LVL10:
+ 128               	.L5:
+ 129 0050 0895      		ret
+ 130               		.cfi_endproc
+ 131               	.LFE4:
+ 133               	.global	getBaudRate
+ 135               	getBaudRate:
+ 136               	.LFB5:
+  64:nvm.c         **** }
+  65:nvm.c         **** 
+  66:nvm.c         **** // We check the baud rate when we read it, anyhow, and if the value stored
+  67:nvm.c         **** //  in EEPROM isn't valid, we default to 115200 baud.
+  68:nvm.c         **** char getBaudRate(void)
+  69:nvm.c         **** {
+ 137               		.loc 1 69 0
+ 138               		.cfi_startproc
+ 139               	/* prologue: function */
+ 140               	/* frame size = 0 */
+ 141               	/* stack size = 0 */
+ 142               	.L__stack_usage = 0
+  70:nvm.c         ****   return eeprom_read_byte((const uint8_t *)BAUDRATE);
+ 143               		.loc 1 70 0
+ 144 0052 82E0      		ldi r24,lo8(2)
+ 145 0054 90E0      		ldi r25,0
+ 146 0056 0C94 0000 		jmp __eerd_byte_m168
+ 147               	.LVL11:
+ 148               		.cfi_endproc
+ 149               	.LFE5:
+ 151               	.global	setBacklightLevel
+ 153               	setBacklightLevel:
+ 154               	.LFB6:
+  71:nvm.c         **** }
+  72:nvm.c         **** 
+  73:nvm.c         **** // Anything greater than 100 defaults to 100, which is a percentage. Since we
+  74:nvm.c         **** //  don't care what it is, we don't have to check to make sure the value is
+  75:nvm.c         **** //  actually valid.
+  76:nvm.c         **** void setBacklightLevel(uint8_t newLevel)
+  77:nvm.c         **** {
+ 155               		.loc 1 77 0
+ 156               		.cfi_startproc
+ 157               	.LVL12:
+ 158               	/* prologue: function */
+ 159               	/* frame size = 0 */
+ 160               	/* stack size = 0 */
+ 161               	.L__stack_usage = 0
+  78:nvm.c         ****   eeprom_write_byte((uint8_t *)BACKLIGHT, newLevel);
+ 162               		.loc 1 78 0
+ 163 005a 682F      		mov r22,r24
+ 164 005c 83E0      		ldi r24,lo8(3)
+ 165 005e 90E0      		ldi r25,0
+ 166               	.LVL13:
+ 167 0060 0C94 0000 		jmp __eewr_byte_m168
+ 168               	.LVL14:
+ 169               		.cfi_endproc
+ 170               	.LFE6:
+ 172               	.global	getBacklightLevel
+ 174               	getBacklightLevel:
+ 175               	.LFB7:
+  79:nvm.c         **** }
+  80:nvm.c         **** 
+  81:nvm.c         **** // Likewise, we don't have to check to see if this value is valid, either.
+  82:nvm.c         **** uint8_t getBacklightLevel(void)
+  83:nvm.c         **** {
+ 176               		.loc 1 83 0
+ 177               		.cfi_startproc
+ 178               	/* prologue: function */
+ 179               	/* frame size = 0 */
+ 180               	/* stack size = 0 */
+ 181               	.L__stack_usage = 0
+  84:nvm.c         ****   return eeprom_read_byte((const uint8_t *)BACKLIGHT);
+ 182               		.loc 1 84 0
+ 183 0064 83E0      		ldi r24,lo8(3)
+ 184 0066 90E0      		ldi r25,0
+ 185 0068 0C94 0000 		jmp __eerd_byte_m168
+ 186               	.LVL15:
+ 187               		.cfi_endproc
+ 188               	.LFE7:
+ 190               	.Letext0:
+ 191               		.file 2 "/usr/lib/avr/include/stdint.h"
+ 192               		.file 3 "/usr/lib/avr/include/avr/eeprom.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 nvm.c
+     /tmp/cc72Xg78.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/cc72Xg78.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/cc72Xg78.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/cc72Xg78.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/cc72Xg78.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/cc72Xg78.s:12     .text:0000000000000000 toggleSplash
+     /tmp/cc72Xg78.s:40     .text:0000000000000014 getSplash
+     /tmp/cc72Xg78.s:58     .text:000000000000001c toggleReverse
+     /tmp/cc72Xg78.s:86     .text:0000000000000032 getReverse
+     /tmp/cc72Xg78.s:107    .text:000000000000003e setBaudRate
+     /tmp/cc72Xg78.s:135    .text:0000000000000052 getBaudRate
+     /tmp/cc72Xg78.s:153    .text:000000000000005a setBacklightLevel
+     /tmp/cc72Xg78.s:174    .text:0000000000000064 getBacklightLevel
+
+UNDEFINED SYMBOLS
+__eerd_byte_m168
+__eewr_byte_m168

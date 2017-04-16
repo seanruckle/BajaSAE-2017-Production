@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Header Files\Hardware Independent">
+      <UniqueIdentifier>{713663bb-bf58-4151-82cb-3d5a80088d63}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Hardware Dependent">
+      <UniqueIdentifier>{f8a4113d-11a9-469b-8835-6f96fef2fa1b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Hardware Independent">
+      <UniqueIdentifier>{ab88307d-e14b-4599-ba18-968b2ab8cb19}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Hardware Dependent">
+      <UniqueIdentifier>{c9c415d3-8f32-4985-a7c6-8c9c02fe96cf}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Display.h">
+      <Filter>Header Files\Hardware Independent</Filter>
+    </ClInclude>
+    <ClInclude Include="GPS.h">
+      <Filter>Header Files\Hardware Independent</Filter>
+    </ClInclude>
+    <ClInclude Include="IMU.h">
+      <Filter>Header Files\Hardware Independent</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripherals.h">
+      <Filter>Header Files\Hardware Independent</Filter>
+    </ClInclude>
+    <ClInclude Include="Remote.h">
+      <Filter>Header Files\Hardware Independent</Filter>
+    </ClInclude>
+    <ClInclude Include="SD.h">
+      <Filter>Header Files\Hardware Independent</Filter>
+    </ClInclude>
+    <ClInclude Include="Sensors.h">
+      <Filter>Header Files\Hardware Independent</Filter>
+    </ClInclude>
+    <ClInclude Include="State.h">
+      <Filter>Header Files\Hardware Independent</Filter>
+    </ClInclude>
+    <ClInclude Include="Telemetry.h">
+      <Filter>Header Files\Hardware Independent</Filter>
+    </ClInclude>
+    <ClInclude Include="Test.h">
+      <Filter>Header Files\Hardware Independent</Filter>
+    </ClInclude>
+    <ClInclude Include="dictionary.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="API_Generic\SerialGraphicLCD.h">
+      <Filter>Header Files\Hardware Dependent</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Display.cpp">
+      <Filter>Source Files\Hardware Independent</Filter>
+    </ClCompile>
+    <ClCompile Include="GPS.cpp">
+      <Filter>Source Files\Hardware Independent</Filter>
+    </ClCompile>
+    <ClCompile Include="IMU.cpp">
+      <Filter>Source Files\Hardware Independent</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripherals.cpp">
+      <Filter>Source Files\Hardware Independent</Filter>
+    </ClCompile>
+    <ClCompile Include="Remote.cpp">
+      <Filter>Source Files\Hardware Independent</Filter>
+    </ClCompile>
+    <ClCompile Include="SD.cpp">
+      <Filter>Source Files\Hardware Independent</Filter>
+    </ClCompile>
+    <ClCompile Include="Sensors.cpp">
+      <Filter>Source Files\Hardware Independent</Filter>
+    </ClCompile>
+    <ClCompile Include="State.cpp">
+      <Filter>Source Files\Hardware Independent</Filter>
+    </ClCompile>
+    <ClCompile Include="Telemetry.cpp">
+      <Filter>Source Files\Hardware Independent</Filter>
+    </ClCompile>
+    <ClCompile Include="Test.cpp">
+      <Filter>Source Files\Hardware Independent</Filter>
+    </ClCompile>
+    <ClCompile Include="API_Generic\SerialGraphicLCD.cpp">
+      <Filter>Source Files\Hardware Dependent</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

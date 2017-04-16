@@ -1,0 +1,1357 @@
+   1               		.file	"t6963.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	t6963ReadStatus
+  12               	t6963ReadStatus:
+  13               	.LFB10:
+  14               		.file 1 "t6963.c"
+   1:t6963.c       **** /***************************************************************************
+   2:t6963.c       **** t6963.c
+   3:t6963.c       **** 
+   4:t6963.c       **** t6963 controller driver file. Handles the hardware-level interfacing for the
+   5:t6963.c       ****  t6963 LCD controller.
+   6:t6963.c       **** 
+   7:t6963.c       **** 02 May 2013 - Mike Hord, SparkFun Electronics
+   8:t6963.c       **** 
+   9:t6963.c       **** This code is released under the Creative Commons Attribution Share-Alike 3.0
+  10:t6963.c       ****  license. You are free to reuse, remix, or redistribute it as you see fit,
+  11:t6963.c       ****  so long as you provide attribution to SparkFun Electronics.
+  12:t6963.c       **** 
+  13:t6963.c       **** ***************************************************************************/
+  14:t6963.c       **** //#define F_CPU 16000000UL
+  15:t6963.c       **** #include <avr/io.h>
+  16:t6963.c       **** #include <util/delay.h>		// F_CPU is defined in the makefile
+  17:t6963.c       **** #include "glcdbp.h"
+  18:t6963.c       **** #include "serial.h"
+  19:t6963.c       **** #include "io_support.h"
+  20:t6963.c       **** #include "t6963.h"
+  21:t6963.c       **** 
+  22:t6963.c       **** extern volatile uint8_t reverse; // This is defined in glcdbp.c
+  23:t6963.c       **** 
+  24:t6963.c       **** // Basic functionality: clearing the display. All we're *really* doing is 
+  25:t6963.c       **** //  writing a one or zero to all the memory locations for the display.
+  26:t6963.c       **** void t6963Clear(void)
+  27:t6963.c       **** {
+  28:t6963.c       ****   // Begin at the beginning.
+  29:t6963.c       ****   t6963SetPointer(0,0);
+  30:t6963.c       ****   // Then, clear out the whole enchilada. We *could* use the auto increment 
+  31:t6963.c       ****   //  mode here to shorten this up a bit, but meh. That would save us the 
+  32:t6963.c       ****   //  command write for each loop, and reduce the overall time by probably a 
+  33:t6963.c       ****   //  few milliseconds.
+  34:t6963.c       ****   for (uint16_t i = 0; i < 2560; i++)
+  35:t6963.c       ****   {
+  36:t6963.c       ****     if (reverse) t6963WriteData(0xff);
+  37:t6963.c       ****     else         t6963WriteData(0x00);
+  38:t6963.c       ****     t6963WriteCmd(0xc0);  // This is the "write-data-then-increment-pointer"
+  39:t6963.c       ****                           //  command. Useful.
+  40:t6963.c       ****   }
+  41:t6963.c       **** }
+  42:t6963.c       **** 
+  43:t6963.c       **** // Write a data byte to the controller.
+  44:t6963.c       **** void t6963WriteData(uint8_t data)
+  45:t6963.c       **** {
+  46:t6963.c       ****   t6963BusyWait(); // Wait for the controller to be ready.
+  47:t6963.c       ****   setData(data);   // Set up the data onto the lines.
+  48:t6963.c       ****   PORTC &= ~(1<<CD); // This tells the controller that we are sending DATA, not
+  49:t6963.c       ****                      //  a command
+  50:t6963.c       ****   _delay_us(1);    // Our processor speed puts us on the hairy edge of the
+  51:t6963.c       ****                    //  timing, so we pad a things a bit here and there.
+  52:t6963.c       ****   PORTC &= ~((1<<WR) | // WRITE, not read, and enable the chip.
+  53:t6963.c       ****              (1<<CE));
+  54:t6963.c       ****   _delay_us(1);    // Again, let's keep our hold time legit.
+  55:t6963.c       ****   PORTC |= (1<<CE); // De-assert the chip.
+  56:t6963.c       ****   PORTC |= ((1<<CD) | // Finally, put the CD, WR, and RD pins back to a known
+  57:t6963.c       ****             (1<<WR) | //  state. We'll do this after every basic command.
+  58:t6963.c       ****             (1<<RD));
+  59:t6963.c       **** }
+  60:t6963.c       **** 
+  61:t6963.c       **** // Read a data byte from the controller.
+  62:t6963.c       **** uint8_t t6963ReadData(void)
+  63:t6963.c       **** {  
+  64:t6963.c       ****   t6963BusyWait();  // Wait for controller to be ready.
+  65:t6963.c       ****   uint8_t data;
+  66:t6963.c       ****   PORTC &= ~(1<<CD); // This is a DATA transaction.
+  67:t6963.c       ****   _delay_us(1);      // Hold time.
+  68:t6963.c       ****   PORTC &= ~( (1<<CE) |  // Enable the chip...
+  69:t6963.c       ****               (1<<RD) ); // ...and tell it this is a READ.
+  70:t6963.c       ****   _delay_us(1);      // Hold time.
+  71:t6963.c       ****   data = readData(); // Fetch the data.
+  72:t6963.c       ****   PORTC |= (1<<CE);  // De-select the chip.
+  73:t6963.c       ****   PORTC |= ((1<<CD) | // Go back to our known state for the signal lines.
+  74:t6963.c       ****             (1<<WR) |
+  75:t6963.c       ****             (1<<RD));
+  76:t6963.c       ****   return data;
+  77:t6963.c       **** }
+  78:t6963.c       **** 
+  79:t6963.c       **** // Write a command to the controller. Note that "reading" a command is
+  80:t6963.c       **** //  nonsensical and no ReadCommand() function is provided.
+  81:t6963.c       **** void t6963WriteCmd(uint8_t command)
+  82:t6963.c       **** {  
+  83:t6963.c       ****   t6963BusyWait();   // Wait for controller to be ready.
+  84:t6963.c       ****   setData(command);  // Set up the data on the lines.
+  85:t6963.c       ****   _delay_us(1);      // Hold time.
+  86:t6963.c       ****   PORTC &= ~(1<<WR); // Tell the controller that we're WRITING.
+  87:t6963.c       ****   _delay_us(1);      // Hold time.
+  88:t6963.c       ****   PORTC &= ~(1<<CE); // Enable the controller to complete the write.
+  89:t6963.c       ****   _delay_us(1);      // Hold time, for the write to happen.
+  90:t6963.c       ****   PORTC |= (1<<CE);  // Deselect the chip.
+  91:t6963.c       ****   PORTC |= ((1<<CD) | // Put the lines back to known normal state.
+  92:t6963.c       ****             (1<<WR) |
+  93:t6963.c       ****             (1<<RD));
+  94:t6963.c       **** }
+  95:t6963.c       **** 
+  96:t6963.c       **** // Read the current chip status. Note that writing the status is not allowed.
+  97:t6963.c       **** uint8_t t6963ReadStatus(void)
+  98:t6963.c       **** {  
+  15               		.loc 1 98 0
+  16               		.cfi_startproc
+  17               	/* prologue: function */
+  18               	/* frame size = 0 */
+  19               	/* stack size = 0 */
+  20               	.L__stack_usage = 0
+  99:t6963.c       ****   // Astute readers will note that there is *no* busyWait() here! This is the
+ 100:t6963.c       ****   //  one basic operation that does not, indeed, CANNOT, busy wait, since
+ 101:t6963.c       ****   //  busy waiting requires one to read the status of the chip.
+ 102:t6963.c       ****   uint8_t status;
+ 103:t6963.c       ****   PORTC &= ~(1<<RD);  // We're reading.
+  21               		.loc 1 103 0
+  22 0000 4198      		cbi 0x8,1
+  23               	.LVL0:
+  24               	.LBB20:
+  25               	.LBB21:
+  26               		.file 2 "/usr/lib/avr/include/util/delay.h"
+   1:/usr/lib/avr/include/util/delay.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   2:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2004,2005,2007 Joerg Wunsch
+   3:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2007  Florin-Viorel Petrov
+   4:/usr/lib/avr/include/util/delay.h ****    All rights reserved.
+   5:/usr/lib/avr/include/util/delay.h **** 
+   6:/usr/lib/avr/include/util/delay.h ****    Redistribution and use in source and binary forms, with or without
+   7:/usr/lib/avr/include/util/delay.h ****    modification, are permitted provided that the following conditions are met:
+   8:/usr/lib/avr/include/util/delay.h **** 
+   9:/usr/lib/avr/include/util/delay.h ****    * Redistributions of source code must retain the above copyright
+  10:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer.
+  11:/usr/lib/avr/include/util/delay.h **** 
+  12:/usr/lib/avr/include/util/delay.h ****    * Redistributions in binary form must reproduce the above copyright
+  13:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer in
+  14:/usr/lib/avr/include/util/delay.h ****      the documentation and/or other materials provided with the
+  15:/usr/lib/avr/include/util/delay.h ****      distribution.
+  16:/usr/lib/avr/include/util/delay.h **** 
+  17:/usr/lib/avr/include/util/delay.h ****    * Neither the name of the copyright holders nor the names of
+  18:/usr/lib/avr/include/util/delay.h ****      contributors may be used to endorse or promote products derived
+  19:/usr/lib/avr/include/util/delay.h ****      from this software without specific prior written permission.
+  20:/usr/lib/avr/include/util/delay.h **** 
+  21:/usr/lib/avr/include/util/delay.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  22:/usr/lib/avr/include/util/delay.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  23:/usr/lib/avr/include/util/delay.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  24:/usr/lib/avr/include/util/delay.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  25:/usr/lib/avr/include/util/delay.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  26:/usr/lib/avr/include/util/delay.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  27:/usr/lib/avr/include/util/delay.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  28:/usr/lib/avr/include/util/delay.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  29:/usr/lib/avr/include/util/delay.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  30:/usr/lib/avr/include/util/delay.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  31:/usr/lib/avr/include/util/delay.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  32:/usr/lib/avr/include/util/delay.h **** 
+  33:/usr/lib/avr/include/util/delay.h **** /* $Id$ */
+  34:/usr/lib/avr/include/util/delay.h **** 
+  35:/usr/lib/avr/include/util/delay.h **** #ifndef _UTIL_DELAY_H_
+  36:/usr/lib/avr/include/util/delay.h **** #define _UTIL_DELAY_H_ 1
+  37:/usr/lib/avr/include/util/delay.h **** 
+  38:/usr/lib/avr/include/util/delay.h **** #ifndef __HAS_DELAY_CYCLES
+  39:/usr/lib/avr/include/util/delay.h **** #define __HAS_DELAY_CYCLES 1
+  40:/usr/lib/avr/include/util/delay.h **** #endif
+  41:/usr/lib/avr/include/util/delay.h **** 
+  42:/usr/lib/avr/include/util/delay.h **** #include <inttypes.h>
+  43:/usr/lib/avr/include/util/delay.h **** #include <util/delay_basic.h>
+  44:/usr/lib/avr/include/util/delay.h **** #include <math.h>
+  45:/usr/lib/avr/include/util/delay.h **** 
+  46:/usr/lib/avr/include/util/delay.h **** /** \file */
+  47:/usr/lib/avr/include/util/delay.h **** /** \defgroup util_delay <util/delay.h>: Convenience functions for busy-wait delay loops
+  48:/usr/lib/avr/include/util/delay.h ****     \code
+  49:/usr/lib/avr/include/util/delay.h ****     #define F_CPU 1000000UL  // 1 MHz
+  50:/usr/lib/avr/include/util/delay.h ****     //#define F_CPU 14.7456E6
+  51:/usr/lib/avr/include/util/delay.h ****     #include <util/delay.h>
+  52:/usr/lib/avr/include/util/delay.h ****     \endcode
+  53:/usr/lib/avr/include/util/delay.h **** 
+  54:/usr/lib/avr/include/util/delay.h ****     \note As an alternative method, it is possible to pass the
+  55:/usr/lib/avr/include/util/delay.h ****     F_CPU macro down to the compiler from the Makefile.
+  56:/usr/lib/avr/include/util/delay.h ****     Obviously, in that case, no \c \#define statement should be
+  57:/usr/lib/avr/include/util/delay.h ****     used.
+  58:/usr/lib/avr/include/util/delay.h **** 
+  59:/usr/lib/avr/include/util/delay.h ****     The functions in this header file are wrappers around the basic
+  60:/usr/lib/avr/include/util/delay.h ****     busy-wait functions from <util/delay_basic.h>.  They are meant as
+  61:/usr/lib/avr/include/util/delay.h ****     convenience functions where actual time values can be specified
+  62:/usr/lib/avr/include/util/delay.h ****     rather than a number of cycles to wait for.  The idea behind is
+  63:/usr/lib/avr/include/util/delay.h ****     that compile-time constant expressions will be eliminated by
+  64:/usr/lib/avr/include/util/delay.h ****     compiler optimization so floating-point expressions can be used
+  65:/usr/lib/avr/include/util/delay.h ****     to calculate the number of delay cycles needed based on the CPU
+  66:/usr/lib/avr/include/util/delay.h ****     frequency passed by the macro F_CPU.
+  67:/usr/lib/avr/include/util/delay.h **** 
+  68:/usr/lib/avr/include/util/delay.h ****     \note In order for these functions to work as intended, compiler
+  69:/usr/lib/avr/include/util/delay.h ****     optimizations <em>must</em> be enabled, and the delay time
+  70:/usr/lib/avr/include/util/delay.h ****     <em>must</em> be an expression that is a known constant at
+  71:/usr/lib/avr/include/util/delay.h ****     compile-time.  If these requirements are not met, the resulting
+  72:/usr/lib/avr/include/util/delay.h ****     delay will be much longer (and basically unpredictable), and
+  73:/usr/lib/avr/include/util/delay.h ****     applications that otherwise do not use floating-point calculations
+  74:/usr/lib/avr/include/util/delay.h ****     will experience severe code bloat by the floating-point library
+  75:/usr/lib/avr/include/util/delay.h ****     routines linked into the application.
+  76:/usr/lib/avr/include/util/delay.h **** 
+  77:/usr/lib/avr/include/util/delay.h ****     The functions available allow the specification of microsecond, and
+  78:/usr/lib/avr/include/util/delay.h ****     millisecond delays directly, using the application-supplied macro
+  79:/usr/lib/avr/include/util/delay.h ****     F_CPU as the CPU clock frequency (in Hertz).
+  80:/usr/lib/avr/include/util/delay.h **** 
+  81:/usr/lib/avr/include/util/delay.h **** */
+  82:/usr/lib/avr/include/util/delay.h **** 
+  83:/usr/lib/avr/include/util/delay.h **** #if !defined(__DOXYGEN__)
+  84:/usr/lib/avr/include/util/delay.h **** static inline void _delay_us(double __us) __attribute__((always_inline));
+  85:/usr/lib/avr/include/util/delay.h **** static inline void _delay_ms(double __ms) __attribute__((always_inline));
+  86:/usr/lib/avr/include/util/delay.h **** #endif
+  87:/usr/lib/avr/include/util/delay.h **** 
+  88:/usr/lib/avr/include/util/delay.h **** #ifndef F_CPU
+  89:/usr/lib/avr/include/util/delay.h **** /* prevent compiler error by supplying a default */
+  90:/usr/lib/avr/include/util/delay.h **** # warning "F_CPU not defined for <util/delay.h>"
+  91:/usr/lib/avr/include/util/delay.h **** # define F_CPU 1000000UL
+  92:/usr/lib/avr/include/util/delay.h **** #endif
+  93:/usr/lib/avr/include/util/delay.h **** 
+  94:/usr/lib/avr/include/util/delay.h **** #ifndef __OPTIMIZE__
+  95:/usr/lib/avr/include/util/delay.h **** # warning "Compiler optimizations disabled; functions from <util/delay.h> won't work as designed"
+  96:/usr/lib/avr/include/util/delay.h **** #endif
+  97:/usr/lib/avr/include/util/delay.h **** 
+  98:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+  99:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 100:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 101:/usr/lib/avr/include/util/delay.h **** #  include <math.h>
+ 102:/usr/lib/avr/include/util/delay.h **** #endif
+ 103:/usr/lib/avr/include/util/delay.h **** 
+ 104:/usr/lib/avr/include/util/delay.h **** /**
+ 105:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 106:/usr/lib/avr/include/util/delay.h **** 
+ 107:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __ms milliseconds, using _delay_loop_2().
+ 108:/usr/lib/avr/include/util/delay.h **** 
+ 109:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 110:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 111:/usr/lib/avr/include/util/delay.h **** 
+ 112:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 262.14 ms / F_CPU in MHz.
+ 113:/usr/lib/avr/include/util/delay.h **** 
+ 114:/usr/lib/avr/include/util/delay.h ****    When the user request delay which exceed the maximum possible one,
+ 115:/usr/lib/avr/include/util/delay.h ****    _delay_ms() provides a decreased resolution functionality. In this
+ 116:/usr/lib/avr/include/util/delay.h ****    mode _delay_ms() will work with a resolution of 1/10 ms, providing
+ 117:/usr/lib/avr/include/util/delay.h ****    delays up to 6.5535 seconds (independent from CPU frequency).  The
+ 118:/usr/lib/avr/include/util/delay.h ****    user will not be informed about decreased resolution.
+ 119:/usr/lib/avr/include/util/delay.h **** 
+ 120:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 121:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 ms/ F_CPU in MHz. For
+ 122:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflows results in
+ 123:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0ms.
+ 124:/usr/lib/avr/include/util/delay.h **** 
+ 125:/usr/lib/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 126:/usr/lib/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 127:/usr/lib/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 128:/usr/lib/avr/include/util/delay.h **** 
+ 129:/usr/lib/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 130:/usr/lib/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 131:/usr/lib/avr/include/util/delay.h **** 
+ 132:/usr/lib/avr/include/util/delay.h ****    Note: The new implementation of _delay_ms(double __ms) with 
+ 133:/usr/lib/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible. 
+ 134:/usr/lib/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 135:/usr/lib/avr/include/util/delay.h ****    Also, the backward compatible
+ 136:/usr/lib/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 137:/usr/lib/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 138:/usr/lib/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 139:/usr/lib/avr/include/util/delay.h **** 
+ 140:/usr/lib/avr/include/util/delay.h ****  */
+ 141:/usr/lib/avr/include/util/delay.h **** void
+ 142:/usr/lib/avr/include/util/delay.h **** _delay_ms(double __ms)
+ 143:/usr/lib/avr/include/util/delay.h **** {
+ 144:/usr/lib/avr/include/util/delay.h **** 	double __tmp ; 
+ 145:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 146:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 147:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 148:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 149:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 150:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e3) * __ms;
+ 151:/usr/lib/avr/include/util/delay.h **** 
+ 152:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 153:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 154:/usr/lib/avr/include/util/delay.h **** 
+ 155:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 156:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 157:/usr/lib/avr/include/util/delay.h **** 
+ 158:/usr/lib/avr/include/util/delay.h **** 	#else
+ 159:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 160:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 161:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 162:/usr/lib/avr/include/util/delay.h **** 
+ 163:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+ 164:/usr/lib/avr/include/util/delay.h **** 
+ 165:/usr/lib/avr/include/util/delay.h **** #else
+ 166:/usr/lib/avr/include/util/delay.h **** 	uint16_t __ticks;
+ 167:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 4e3) * __ms;
+ 168:/usr/lib/avr/include/util/delay.h **** 	if (__tmp < 1.0)
+ 169:/usr/lib/avr/include/util/delay.h **** 		__ticks = 1;
+ 170:/usr/lib/avr/include/util/delay.h **** 	else if (__tmp > 65535)
+ 171:/usr/lib/avr/include/util/delay.h **** 	{
+ 172:/usr/lib/avr/include/util/delay.h **** 		//	__ticks = requested delay in 1/10 ms
+ 173:/usr/lib/avr/include/util/delay.h **** 		__ticks = (uint16_t) (__ms * 10.0);
+ 174:/usr/lib/avr/include/util/delay.h **** 		while(__ticks)
+ 175:/usr/lib/avr/include/util/delay.h **** 		{
+ 176:/usr/lib/avr/include/util/delay.h **** 			// wait 1/10 ms
+ 177:/usr/lib/avr/include/util/delay.h **** 			_delay_loop_2(((F_CPU) / 4e3) / 10);
+ 178:/usr/lib/avr/include/util/delay.h **** 			__ticks --;
+ 179:/usr/lib/avr/include/util/delay.h **** 		}
+ 180:/usr/lib/avr/include/util/delay.h **** 		return;
+ 181:/usr/lib/avr/include/util/delay.h **** 	}
+ 182:/usr/lib/avr/include/util/delay.h **** 	else
+ 183:/usr/lib/avr/include/util/delay.h **** 		__ticks = (uint16_t)__tmp;
+ 184:/usr/lib/avr/include/util/delay.h **** 	_delay_loop_2(__ticks);
+ 185:/usr/lib/avr/include/util/delay.h **** #endif
+ 186:/usr/lib/avr/include/util/delay.h **** }
+ 187:/usr/lib/avr/include/util/delay.h **** 
+ 188:/usr/lib/avr/include/util/delay.h **** /**
+ 189:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 190:/usr/lib/avr/include/util/delay.h **** 
+ 191:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __us microseconds, using _delay_loop_1().
+ 192:/usr/lib/avr/include/util/delay.h **** 
+ 193:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 194:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 195:/usr/lib/avr/include/util/delay.h **** 
+ 196:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 768 us / F_CPU in MHz.
+ 197:/usr/lib/avr/include/util/delay.h **** 
+ 198:/usr/lib/avr/include/util/delay.h ****    If the user requests a delay greater than the maximal possible one,
+ 199:/usr/lib/avr/include/util/delay.h ****    _delay_us() will automatically call _delay_ms() instead.  The user
+ 200:/usr/lib/avr/include/util/delay.h ****    will not be informed about this case.
+ 201:/usr/lib/avr/include/util/delay.h **** 
+ 202:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 203:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 us/ F_CPU in MHz. For
+ 204:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflow results in
+ 205:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0us.
+ 206:/usr/lib/avr/include/util/delay.h ****   
+ 207:/usr/lib/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 208:/usr/lib/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 209:/usr/lib/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 210:/usr/lib/avr/include/util/delay.h **** 
+ 211:/usr/lib/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 212:/usr/lib/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 213:/usr/lib/avr/include/util/delay.h ****  
+ 214:/usr/lib/avr/include/util/delay.h ****    Note: The new implementation of _delay_us(double __us) with 
+ 215:/usr/lib/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible.
+ 216:/usr/lib/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 217:/usr/lib/avr/include/util/delay.h ****    Also, the backward compatible
+ 218:/usr/lib/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 219:/usr/lib/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 220:/usr/lib/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 221:/usr/lib/avr/include/util/delay.h **** 
+ 222:/usr/lib/avr/include/util/delay.h ****  */
+ 223:/usr/lib/avr/include/util/delay.h **** void
+ 224:/usr/lib/avr/include/util/delay.h **** _delay_us(double __us)
+ 225:/usr/lib/avr/include/util/delay.h **** {
+ 226:/usr/lib/avr/include/util/delay.h **** 	double __tmp ; 
+ 227:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 228:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 229:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 230:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 231:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 232:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e6) * __us;
+ 233:/usr/lib/avr/include/util/delay.h **** 
+ 234:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 235:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 236:/usr/lib/avr/include/util/delay.h **** 
+ 237:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 238:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 239:/usr/lib/avr/include/util/delay.h **** 
+ 240:/usr/lib/avr/include/util/delay.h **** 	#else
+ 241:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 242:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 243:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 244:/usr/lib/avr/include/util/delay.h **** 
+ 245:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+  27               		.loc 2 245 0
+  28 0002 85E0      		ldi r24,lo8(5)
+  29 0004 8A95      		1: dec r24
+  30 0006 01F4      		brne 1b
+  31 0008 0000      		nop
+  32               	.LBE21:
+  33               	.LBE20:
+ 104:t6963.c       ****   _delay_us(1);       // Hold time.
+ 105:t6963.c       ****   PORTC &= ~(1<<CE);  // Enable the chip.
+  34               		.loc 1 105 0
+  35 000a 4298      		cbi 0x8,2
+  36               	.LVL1:
+  37               	.LBB22:
+  38               	.LBB23:
+  39               		.loc 2 245 0
+  40 000c 85E0      		ldi r24,lo8(5)
+  41 000e 8A95      		1: dec r24
+  42 0010 01F4      		brne 1b
+  43 0012 0000      		nop
+  44               	.LBE23:
+  45               	.LBE22:
+ 106:t6963.c       ****   _delay_us(1);       // Hold time.
+ 107:t6963.c       ****   status = readData(); // The status should be on the data pins; fetch it.
+  46               		.loc 1 107 0
+  47 0014 0E94 0000 		call readData
+  48               	.LVL2:
+ 108:t6963.c       ****   PORTC |= (1<<CE);   // Deselect the chip.
+  49               		.loc 1 108 0
+  50 0018 429A      		sbi 0x8,2
+ 109:t6963.c       ****   PORTC |= ((1<<CD) | // Housekeeping- put the pins back to known rest state.
+  51               		.loc 1 109 0
+  52 001a 98B1      		in r25,0x8
+  53 001c 9B60      		ori r25,lo8(11)
+  54 001e 98B9      		out 0x8,r25
+ 110:t6963.c       ****             (1<<WR) |
+ 111:t6963.c       ****             (1<<RD));
+ 112:t6963.c       ****   return status;      // Return our findings.
+ 113:t6963.c       **** }
+  55               		.loc 1 113 0
+  56 0020 0895      		ret
+  57               		.cfi_endproc
+  58               	.LFE10:
+  60               	.global	t6963BusyWait
+  62               	t6963BusyWait:
+  63               	.LFB11:
+ 114:t6963.c       **** 
+ 115:t6963.c       **** // busyWait() spins its wheels until the controller returns that it's ready to
+ 116:t6963.c       **** //  accept a new data or command byte. Note that this is *not* applicable for
+ 117:t6963.c       **** //  the auto-write mode, only for normal command and data read writes.
+ 118:t6963.c       **** //  Bits 1:0 of the status result will both be zero when interaction with the
+ 119:t6963.c       **** //  controller is counterindicated. We want to wait for a nonzero value to
+ 120:t6963.c       **** //  appear there.
+ 121:t6963.c       **** void t6963BusyWait(void)
+ 122:t6963.c       **** {
+  64               		.loc 1 122 0
+  65               		.cfi_startproc
+  66               	/* prologue: function */
+  67               	/* frame size = 0 */
+  68               	/* stack size = 0 */
+  69               	.L__stack_usage = 0
+  70               	.L4:
+ 123:t6963.c       ****   uint8_t status;
+ 124:t6963.c       ****   do
+ 125:t6963.c       ****   {
+ 126:t6963.c       ****     status = t6963ReadStatus();
+  71               		.loc 1 126 0 discriminator 1
+  72 0022 0E94 0000 		call t6963ReadStatus
+  73               	.LVL3:
+ 127:t6963.c       ****   } while ((status & 0x03) == 0x00);
+  74               		.loc 1 127 0 discriminator 1
+  75 0026 8370      		andi r24,lo8(3)
+  76               	.LVL4:
+  77 0028 01F0      		breq .L4
+  78               	/* epilogue start */
+ 128:t6963.c       **** }
+  79               		.loc 1 128 0
+  80 002a 0895      		ret
+  81               		.cfi_endproc
+  82               	.LFE11:
+  84               	.global	t6963WriteData
+  86               	t6963WriteData:
+  87               	.LFB7:
+  45:t6963.c       ****   t6963BusyWait(); // Wait for the controller to be ready.
+  88               		.loc 1 45 0
+  89               		.cfi_startproc
+  90               	.LVL5:
+  91 002c CF93      		push r28
+  92               	.LCFI0:
+  93               		.cfi_def_cfa_offset 3
+  94               		.cfi_offset 28, -2
+  95 002e DF93      		push r29
+  96               	.LCFI1:
+  97               		.cfi_def_cfa_offset 4
+  98               		.cfi_offset 29, -3
+  99 0030 1F92      		push __zero_reg__
+ 100               	.LCFI2:
+ 101               		.cfi_def_cfa_offset 5
+ 102 0032 CDB7      		in r28,__SP_L__
+ 103 0034 DEB7      		in r29,__SP_H__
+ 104               	.LCFI3:
+ 105               		.cfi_def_cfa_register 28
+ 106               	/* prologue: function */
+ 107               	/* frame size = 1 */
+ 108               	/* stack size = 3 */
+ 109               	.L__stack_usage = 3
+  46:t6963.c       ****   setData(data);   // Set up the data onto the lines.
+ 110               		.loc 1 46 0
+ 111 0036 8983      		std Y+1,r24
+ 112 0038 0E94 0000 		call t6963BusyWait
+ 113               	.LVL6:
+  47:t6963.c       ****   PORTC &= ~(1<<CD); // This tells the controller that we are sending DATA, not
+ 114               		.loc 1 47 0
+ 115 003c 8981      		ldd r24,Y+1
+ 116 003e 0E94 0000 		call setData
+ 117               	.LVL7:
+  48:t6963.c       ****                      //  a command
+ 118               		.loc 1 48 0
+ 119 0042 4398      		cbi 0x8,3
+ 120               	.LVL8:
+ 121               	.LBB24:
+ 122               	.LBB25:
+ 123               		.loc 2 245 0
+ 124 0044 85E0      		ldi r24,lo8(5)
+ 125 0046 8A95      		1: dec r24
+ 126 0048 01F4      		brne 1b
+ 127 004a 0000      		nop
+ 128               	.LBE25:
+ 129               	.LBE24:
+  52:t6963.c       ****              (1<<CE));
+ 130               		.loc 1 52 0
+ 131 004c 88B1      		in r24,0x8
+ 132 004e 8A7F      		andi r24,lo8(-6)
+ 133 0050 88B9      		out 0x8,r24
+ 134               	.LVL9:
+ 135               	.LBB26:
+ 136               	.LBB27:
+ 137               		.loc 2 245 0
+ 138 0052 E5E0      		ldi r30,lo8(5)
+ 139 0054 EA95      		1: dec r30
+ 140 0056 01F4      		brne 1b
+ 141 0058 0000      		nop
+ 142               	.LBE27:
+ 143               	.LBE26:
+  55:t6963.c       ****   PORTC |= ((1<<CD) | // Finally, put the CD, WR, and RD pins back to a known
+ 144               		.loc 1 55 0
+ 145 005a 429A      		sbi 0x8,2
+  56:t6963.c       ****             (1<<WR) | //  state. We'll do this after every basic command.
+ 146               		.loc 1 56 0
+ 147 005c 88B1      		in r24,0x8
+ 148 005e 8B60      		ori r24,lo8(11)
+ 149 0060 88B9      		out 0x8,r24
+ 150               	/* epilogue start */
+  59:t6963.c       **** 
+ 151               		.loc 1 59 0
+ 152 0062 0F90      		pop __tmp_reg__
+ 153 0064 DF91      		pop r29
+ 154 0066 CF91      		pop r28
+ 155 0068 0895      		ret
+ 156               		.cfi_endproc
+ 157               	.LFE7:
+ 159               	.global	t6963ReadData
+ 161               	t6963ReadData:
+ 162               	.LFB8:
+  63:t6963.c       ****   t6963BusyWait();  // Wait for controller to be ready.
+ 163               		.loc 1 63 0
+ 164               		.cfi_startproc
+ 165               	/* prologue: function */
+ 166               	/* frame size = 0 */
+ 167               	/* stack size = 0 */
+ 168               	.L__stack_usage = 0
+  64:t6963.c       ****   uint8_t data;
+ 169               		.loc 1 64 0
+ 170 006a 0E94 0000 		call t6963BusyWait
+ 171               	.LVL10:
+  66:t6963.c       ****   _delay_us(1);      // Hold time.
+ 172               		.loc 1 66 0
+ 173 006e 4398      		cbi 0x8,3
+ 174               	.LVL11:
+ 175               	.LBB28:
+ 176               	.LBB29:
+ 177               		.loc 2 245 0
+ 178 0070 85E0      		ldi r24,lo8(5)
+ 179 0072 8A95      		1: dec r24
+ 180 0074 01F4      		brne 1b
+ 181 0076 0000      		nop
+ 182               	.LBE29:
+ 183               	.LBE28:
+  68:t6963.c       ****               (1<<RD) ); // ...and tell it this is a READ.
+ 184               		.loc 1 68 0
+ 185 0078 88B1      		in r24,0x8
+ 186 007a 897F      		andi r24,lo8(-7)
+ 187 007c 88B9      		out 0x8,r24
+ 188               	.LVL12:
+ 189               	.LBB30:
+ 190               	.LBB31:
+ 191               		.loc 2 245 0
+ 192 007e 85E0      		ldi r24,lo8(5)
+ 193 0080 8A95      		1: dec r24
+ 194 0082 01F4      		brne 1b
+ 195 0084 0000      		nop
+ 196               	.LBE31:
+ 197               	.LBE30:
+  71:t6963.c       ****   PORTC |= (1<<CE);  // De-select the chip.
+ 198               		.loc 1 71 0
+ 199 0086 0E94 0000 		call readData
+ 200               	.LVL13:
+  72:t6963.c       ****   PORTC |= ((1<<CD) | // Go back to our known state for the signal lines.
+ 201               		.loc 1 72 0
+ 202 008a 429A      		sbi 0x8,2
+  73:t6963.c       ****             (1<<WR) |
+ 203               		.loc 1 73 0
+ 204 008c 98B1      		in r25,0x8
+ 205 008e 9B60      		ori r25,lo8(11)
+ 206 0090 98B9      		out 0x8,r25
+  77:t6963.c       **** 
+ 207               		.loc 1 77 0
+ 208 0092 0895      		ret
+ 209               		.cfi_endproc
+ 210               	.LFE8:
+ 212               	.global	t6963WriteCmd
+ 214               	t6963WriteCmd:
+ 215               	.LFB9:
+  82:t6963.c       ****   t6963BusyWait();   // Wait for controller to be ready.
+ 216               		.loc 1 82 0
+ 217               		.cfi_startproc
+ 218               	.LVL14:
+ 219 0094 CF93      		push r28
+ 220               	.LCFI4:
+ 221               		.cfi_def_cfa_offset 3
+ 222               		.cfi_offset 28, -2
+ 223 0096 DF93      		push r29
+ 224               	.LCFI5:
+ 225               		.cfi_def_cfa_offset 4
+ 226               		.cfi_offset 29, -3
+ 227 0098 1F92      		push __zero_reg__
+ 228               	.LCFI6:
+ 229               		.cfi_def_cfa_offset 5
+ 230 009a CDB7      		in r28,__SP_L__
+ 231 009c DEB7      		in r29,__SP_H__
+ 232               	.LCFI7:
+ 233               		.cfi_def_cfa_register 28
+ 234               	/* prologue: function */
+ 235               	/* frame size = 1 */
+ 236               	/* stack size = 3 */
+ 237               	.L__stack_usage = 3
+  83:t6963.c       ****   setData(command);  // Set up the data on the lines.
+ 238               		.loc 1 83 0
+ 239 009e 8983      		std Y+1,r24
+ 240 00a0 0E94 0000 		call t6963BusyWait
+ 241               	.LVL15:
+  84:t6963.c       ****   _delay_us(1);      // Hold time.
+ 242               		.loc 1 84 0
+ 243 00a4 8981      		ldd r24,Y+1
+ 244 00a6 0E94 0000 		call setData
+ 245               	.LVL16:
+ 246               	.LBB32:
+ 247               	.LBB33:
+ 248               		.loc 2 245 0
+ 249 00aa 85E0      		ldi r24,lo8(5)
+ 250 00ac 8A95      		1: dec r24
+ 251 00ae 01F4      		brne 1b
+ 252 00b0 0000      		nop
+ 253               	.LBE33:
+ 254               	.LBE32:
+  86:t6963.c       ****   _delay_us(1);      // Hold time.
+ 255               		.loc 1 86 0
+ 256 00b2 4098      		cbi 0x8,0
+ 257               	.LVL17:
+ 258               	.LBB34:
+ 259               	.LBB35:
+ 260               		.loc 2 245 0
+ 261 00b4 E5E0      		ldi r30,lo8(5)
+ 262 00b6 EA95      		1: dec r30
+ 263 00b8 01F4      		brne 1b
+ 264 00ba 0000      		nop
+ 265               	.LBE35:
+ 266               	.LBE34:
+  88:t6963.c       ****   _delay_us(1);      // Hold time, for the write to happen.
+ 267               		.loc 1 88 0
+ 268 00bc 4298      		cbi 0x8,2
+ 269               	.LVL18:
+ 270               	.LBB36:
+ 271               	.LBB37:
+ 272               		.loc 2 245 0
+ 273 00be F5E0      		ldi r31,lo8(5)
+ 274 00c0 FA95      		1: dec r31
+ 275 00c2 01F4      		brne 1b
+ 276 00c4 0000      		nop
+ 277               	.LBE37:
+ 278               	.LBE36:
+  90:t6963.c       ****   PORTC |= ((1<<CD) | // Put the lines back to known normal state.
+ 279               		.loc 1 90 0
+ 280 00c6 429A      		sbi 0x8,2
+  91:t6963.c       ****             (1<<WR) |
+ 281               		.loc 1 91 0
+ 282 00c8 88B1      		in r24,0x8
+ 283 00ca 8B60      		ori r24,lo8(11)
+ 284 00cc 88B9      		out 0x8,r24
+ 285               	/* epilogue start */
+  94:t6963.c       **** 
+ 286               		.loc 1 94 0
+ 287 00ce 0F90      		pop __tmp_reg__
+ 288 00d0 DF91      		pop r29
+ 289 00d2 CF91      		pop r28
+ 290 00d4 0895      		ret
+ 291               		.cfi_endproc
+ 292               	.LFE9:
+ 294               	.global	t6963SetPointer
+ 296               	t6963SetPointer:
+ 297               	.LFB12:
+ 129:t6963.c       **** 
+ 130:t6963.c       **** // Set the pointer to the byte which contains an arbirary x, y point. For our
+ 131:t6963.c       **** //  160 x 128 pixel display, there are 20*128 memory address, so we need a
+ 132:t6963.c       **** //  16-bit value to refer to the whole graphics area array.
+ 133:t6963.c       **** void t6963SetPointer(uint8_t x, uint8_t y)
+ 134:t6963.c       **** {
+ 298               		.loc 1 134 0
+ 299               		.cfi_startproc
+ 300               	.LVL19:
+ 301 00d6 CF93      		push r28
+ 302               	.LCFI8:
+ 303               		.cfi_def_cfa_offset 3
+ 304               		.cfi_offset 28, -2
+ 305 00d8 DF93      		push r29
+ 306               	.LCFI9:
+ 307               		.cfi_def_cfa_offset 4
+ 308               		.cfi_offset 29, -3
+ 309               	/* prologue: function */
+ 310               	/* frame size = 0 */
+ 311               	/* stack size = 2 */
+ 312               	.L__stack_usage = 2
+ 135:t6963.c       ****   // Calculate which address in our memory space contains the pixel. For each
+ 136:t6963.c       ****   //  increase in y, we increase by 20 locations. For each 8 pixels in x, we
+ 137:t6963.c       ****   //  increase by one location. Using a 3-right-shift is a cheap way of doing
+ 138:t6963.c       ****   //  divide by 8 in a processor without a divide operation. Maybe the
+ 139:t6963.c       ****   //  compiler knows that, maybe not.
+ 140:t6963.c       ****   uint16_t pointerAddress = (y * 20) + (x>>3);
+ 313               		.loc 1 140 0
+ 314 00da 8695      		lsr r24
+ 315 00dc 8695      		lsr r24
+ 316 00de 8695      		lsr r24
+ 317               	.LVL20:
+ 318 00e0 C82F      		mov r28,r24
+ 319 00e2 D0E0      		ldi r29,0
+ 320 00e4 84E1      		ldi r24,lo8(20)
+ 321 00e6 689F      		mul r22,r24
+ 322 00e8 C00D      		add r28,r0
+ 323 00ea D11D      		adc r29,r1
+ 324 00ec 1124      		clr __zero_reg__
+ 325               	.LVL21:
+ 141:t6963.c       ****   // Now that we have our address, we can write our data out.
+ 142:t6963.c       ****   // This is the low byte of the address
+ 143:t6963.c       ****   t6963WriteData((uint8_t)pointerAddress);
+ 326               		.loc 1 143 0
+ 327 00ee 8C2F      		mov r24,r28
+ 328 00f0 0E94 0000 		call t6963WriteData
+ 329               	.LVL22:
+ 144:t6963.c       ****   // This is the high byte of the address
+ 145:t6963.c       ****   t6963WriteData((uint8_t)(pointerAddress>>8));
+ 330               		.loc 1 145 0
+ 331 00f4 8D2F      		mov r24,r29
+ 332 00f6 0E94 0000 		call t6963WriteData
+ 333               	.LVL23:
+ 146:t6963.c       ****   t6963WriteCmd(0x24);  // This is the command for "set pointer address".
+ 334               		.loc 1 146 0
+ 335 00fa 84E2      		ldi r24,lo8(36)
+ 336               	/* epilogue start */
+ 147:t6963.c       **** }
+ 337               		.loc 1 147 0
+ 338 00fc DF91      		pop r29
+ 339 00fe CF91      		pop r28
+ 340               	.LVL24:
+ 146:t6963.c       ****   t6963WriteCmd(0x24);  // This is the command for "set pointer address".
+ 341               		.loc 1 146 0
+ 342 0100 0C94 0000 		jmp t6963WriteCmd
+ 343               	.LVL25:
+ 344               		.cfi_endproc
+ 345               	.LFE12:
+ 347               	.global	t6963Clear
+ 349               	t6963Clear:
+ 350               	.LFB6:
+  27:t6963.c       ****   // Begin at the beginning.
+ 351               		.loc 1 27 0
+ 352               		.cfi_startproc
+ 353 0104 CF93      		push r28
+ 354               	.LCFI10:
+ 355               		.cfi_def_cfa_offset 3
+ 356               		.cfi_offset 28, -2
+ 357 0106 DF93      		push r29
+ 358               	.LCFI11:
+ 359               		.cfi_def_cfa_offset 4
+ 360               		.cfi_offset 29, -3
+ 361               	/* prologue: function */
+ 362               	/* frame size = 0 */
+ 363               	/* stack size = 2 */
+ 364               	.L__stack_usage = 2
+  29:t6963.c       ****   // Then, clear out the whole enchilada. We *could* use the auto increment 
+ 365               		.loc 1 29 0
+ 366 0108 60E0      		ldi r22,0
+ 367 010a 80E0      		ldi r24,0
+ 368 010c 0E94 0000 		call t6963SetPointer
+ 369               	.LVL26:
+ 370 0110 C0E0      		ldi r28,0
+ 371 0112 DAE0      		ldi r29,lo8(10)
+ 372               	.LVL27:
+ 373               	.L14:
+ 374               	.LBB38:
+  36:t6963.c       ****     else         t6963WriteData(0x00);
+ 375               		.loc 1 36 0
+ 376 0114 8091 0000 		lds r24,reverse
+ 377 0118 8823      		tst r24
+ 378 011a 01F0      		breq .L11
+  36:t6963.c       ****     else         t6963WriteData(0x00);
+ 379               		.loc 1 36 0 is_stmt 0 discriminator 1
+ 380 011c 8FEF      		ldi r24,lo8(-1)
+ 381 011e 00C0      		rjmp .L15
+ 382               	.L11:
+  37:t6963.c       ****     t6963WriteCmd(0xc0);  // This is the "write-data-then-increment-pointer"
+ 383               		.loc 1 37 0 is_stmt 1
+ 384 0120 80E0      		ldi r24,0
+ 385               	.L15:
+ 386 0122 0E94 0000 		call t6963WriteData
+ 387               	.LVL28:
+  38:t6963.c       ****                           //  command. Useful.
+ 388               		.loc 1 38 0
+ 389 0126 80EC      		ldi r24,lo8(-64)
+ 390 0128 0E94 0000 		call t6963WriteCmd
+ 391               	.LVL29:
+ 392 012c 2197      		sbiw r28,1
+ 393               	.LVL30:
+  34:t6963.c       ****   {
+ 394               		.loc 1 34 0
+ 395 012e 2097      		sbiw r28,0
+ 396 0130 01F4      		brne .L14
+ 397               	/* epilogue start */
+ 398               	.LBE38:
+  41:t6963.c       **** 
+ 399               		.loc 1 41 0
+ 400 0132 DF91      		pop r29
+ 401 0134 CF91      		pop r28
+ 402               	.LVL31:
+ 403 0136 0895      		ret
+ 404               		.cfi_endproc
+ 405               	.LFE6:
+ 407               	.global	t6963DisplayInit
+ 409               	t6963DisplayInit:
+ 410               	.LFB13:
+ 148:t6963.c       **** 
+ 149:t6963.c       **** void t6963DisplayInit(void)
+ 150:t6963.c       **** {
+ 411               		.loc 1 150 0
+ 412               		.cfi_startproc
+ 413               	/* prologue: function */
+ 414               	/* frame size = 0 */
+ 415               	/* stack size = 0 */
+ 416               	.L__stack_usage = 0
+ 151:t6963.c       ****   // The first part of display initialization is to set the start location of
+ 152:t6963.c       ****   //  the graphics in memory. We'll set it to 0x0000.
+ 153:t6963.c       ****   t6963WriteData(0x00); // Write the low byte of the graphics home address.
+ 417               		.loc 1 153 0
+ 418 0138 80E0      		ldi r24,0
+ 419 013a 0E94 0000 		call t6963WriteData
+ 420               	.LVL32:
+ 154:t6963.c       ****   t6963WriteData(0x00); // Write the high byte of the graphics home address.
+ 421               		.loc 1 154 0
+ 422 013e 80E0      		ldi r24,0
+ 423 0140 0E94 0000 		call t6963WriteData
+ 424               	.LVL33:
+ 155:t6963.c       ****   t6963WriteCmd(0x42);  // "Write graphics home address" command.
+ 425               		.loc 1 155 0
+ 426 0144 82E4      		ldi r24,lo8(66)
+ 427 0146 0E94 0000 		call t6963WriteCmd
+ 428               	.LVL34:
+ 156:t6963.c       ****   
+ 157:t6963.c       ****   // Next, we need to set the graphics area. This is the length of each line
+ 158:t6963.c       ****   //  before the line wraps to the next one. Note that it does not have to
+ 159:t6963.c       ****   //  equal the actual number of pixels in the display- just equal to or
+ 160:t6963.c       ****   //  greater than.
+ 161:t6963.c       ****   t6963WriteData(20);   // # bytes per line (160 pixels/8 bits per byte)
+ 429               		.loc 1 161 0
+ 430 014a 84E1      		ldi r24,lo8(20)
+ 431 014c 0E94 0000 		call t6963WriteData
+ 432               	.LVL35:
+ 162:t6963.c       ****   t6963WriteData(0x00); // Always zero.
+ 433               		.loc 1 162 0
+ 434 0150 80E0      		ldi r24,0
+ 435 0152 0E94 0000 		call t6963WriteData
+ 436               	.LVL36:
+ 163:t6963.c       ****   t6963WriteCmd(0x43);  // "Write graphics area" command.
+ 437               		.loc 1 163 0
+ 438 0156 83E4      		ldi r24,lo8(67)
+ 439 0158 0E94 0000 		call t6963WriteCmd
+ 440               	.LVL37:
+ 164:t6963.c       ****   
+ 165:t6963.c       ****   // Now we need to write the mode set command; most likely, this is not
+ 166:t6963.c       ****   //  needed, because the defaults should work, but never trust the defaults.
+ 167:t6963.c       ****   //  Also, I *think* this only really affects the way text is rendered, and
+ 168:t6963.c       ****   //  since we're only doing graphics rendering, it probably doesn't matter.
+ 169:t6963.c       ****   //  Register takes the form
+ 170:t6963.c       ****   //    1  0  0  0  CG  MD2  MD1  MD0
+ 171:t6963.c       ****   //  CG -    0   = internal ROM character generation
+ 172:t6963.c       ****   //          1   = RAM character generation
+ 173:t6963.c       ****   //  MD2-0 - 000 = OR mode
+ 174:t6963.c       ****   //          001 = XOR mode
+ 175:t6963.c       ****   //          010 = AND mode
+ 176:t6963.c       ****   //          100 = TEXT ATTRIBUTE mode
+ 177:t6963.c       ****   t6963WriteCmd(0x80);
+ 441               		.loc 1 177 0
+ 442 015c 80E8      		ldi r24,lo8(-128)
+ 443 015e 0E94 0000 		call t6963WriteCmd
+ 444               	.LVL38:
+ 178:t6963.c       ****   
+ 179:t6963.c       ****   // There's a DISPLAY MODE command, too. This seems more likely to be useful
+ 180:t6963.c       ****   //  to us. The register takes the form
+ 181:t6963.c       ****   //     1  0  0  1  GRPH  TEXT  CUR  BLK
+ 182:t6963.c       ****   //  GRPH - 1/0 graphics on/off
+ 183:t6963.c       ****   //  TEXT - 1/0 text display on/off
+ 184:t6963.c       ****   //  CUR  - 1/0 text cursor displayed/not displayed
+ 185:t6963.c       ****   //  BLK  - 1/0 text cursory blink on/off
+ 186:t6963.c       ****   t6963WriteCmd(0x98);
+ 445               		.loc 1 186 0
+ 446 0162 88E9      		ldi r24,lo8(-104)
+ 447 0164 0C94 0000 		jmp t6963WriteCmd
+ 448               	.LVL39:
+ 449               		.cfi_endproc
+ 450               	.LFE13:
+ 452               	.global	t6963BitSR
+ 454               	t6963BitSR:
+ 455               	.LFB14:
+ 187:t6963.c       **** }
+ 188:t6963.c       **** 
+ 189:t6963.c       **** // In addition to bytewise read/write of data, the t6963 can do a bitwise
+ 190:t6963.c       **** //  set/reset of pixels natively. To do this, we use this command:
+ 191:t6963.c       **** //    1  1  1  1  S/R  B2  B1  B0
+ 192:t6963.c       **** //  S/R   -  1/0 Set/reset bit
+ 193:t6963.c       **** //  B2:B0 -  index of bit to be set or reset (value is in bitIndex)
+ 194:t6963.c       **** void t6963BitSR(uint8_t bit, uint8_t SR)
+ 195:t6963.c       **** {
+ 456               		.loc 1 195 0
+ 457               		.cfi_startproc
+ 458               	.LVL40:
+ 459               	/* prologue: function */
+ 460               	/* frame size = 0 */
+ 461               	/* stack size = 0 */
+ 462               	.L__stack_usage = 0
+ 196:t6963.c       ****   uint8_t command = 0xf0;
+ 197:t6963.c       ****   command |= SR;
+ 463               		.loc 1 197 0
+ 464 0168 806F      		ori r24,lo8(-16)
+ 465               	.LVL41:
+ 198:t6963.c       ****   command |= bit;
+ 199:t6963.c       ****   t6963WriteCmd(command);
+ 466               		.loc 1 199 0
+ 467 016a 862B      		or r24,r22
+ 468               	.LVL42:
+ 469 016c 0C94 0000 		jmp t6963WriteCmd
+ 470               	.LVL43:
+ 471               		.cfi_endproc
+ 472               	.LFE14:
+ 474               	.global	t6963DrawPixel
+ 476               	t6963DrawPixel:
+ 477               	.LFB15:
+ 200:t6963.c       **** }
+ 201:t6963.c       **** 
+ 202:t6963.c       **** // To draw a single pixel, we need to set the address pointer to the byte
+ 203:t6963.c       **** //  which contains the pixel, then issue a "bit set/clear" command on that
+ 204:t6963.c       **** //  bit. Note that the order of pixels is backwards- while the address of
+ 205:t6963.c       **** //  the columns increases across the display, within a given 8-bit column,
+ 206:t6963.c       **** //  bit 0 is the rightmost bit.
+ 207:t6963.c       **** void t6963DrawPixel(uint8_t x, uint8_t y, PIX_VAL pixel)
+ 208:t6963.c       **** {
+ 478               		.loc 1 208 0
+ 479               		.cfi_startproc
+ 480               	.LVL44:
+ 481 0170 1F93      		push r17
+ 482               	.LCFI12:
+ 483               		.cfi_def_cfa_offset 3
+ 484               		.cfi_offset 17, -2
+ 485 0172 CF93      		push r28
+ 486               	.LCFI13:
+ 487               		.cfi_def_cfa_offset 4
+ 488               		.cfi_offset 28, -3
+ 489 0174 DF93      		push r29
+ 490               	.LCFI14:
+ 491               		.cfi_def_cfa_offset 5
+ 492               		.cfi_offset 29, -4
+ 493 0176 1F92      		push __zero_reg__
+ 494               	.LCFI15:
+ 495               		.cfi_def_cfa_offset 6
+ 496 0178 CDB7      		in r28,__SP_L__
+ 497 017a DEB7      		in r29,__SP_H__
+ 498               	.LCFI16:
+ 499               		.cfi_def_cfa_register 28
+ 500               	/* prologue: function */
+ 501               	/* frame size = 1 */
+ 502               	/* stack size = 4 */
+ 503               	.L__stack_usage = 4
+ 504 017c 182F      		mov r17,r24
+ 209:t6963.c       ****   // Step one: select the byte in question.
+ 210:t6963.c       ****   t6963SetPointer(x, y);
+ 505               		.loc 1 210 0
+ 506 017e 4983      		std Y+1,r20
+ 507 0180 0E94 0000 		call t6963SetPointer
+ 508               	.LVL45:
+ 211:t6963.c       ****   // Figure out which bit we're interested in setting/clearing
+ 212:t6963.c       ****   uint8_t bitIndex = 7-(x%8);
+ 509               		.loc 1 212 0
+ 510 0184 812F      		mov r24,r17
+ 511 0186 8095      		com r24
+ 512 0188 8770      		andi r24,lo8(7)
+ 513               	.LVL46:
+ 213:t6963.c       ****   // Now we'll use the set/reset bit command to toggle the bit we're
+ 214:t6963.c       ****   //  interested in.
+ 215:t6963.c       ****   // Of course, before we can do that, we need to determine, based on the
+ 216:t6963.c       ****   //  state of reverse, whether "ON" and "OFF" correspond to set/reset or
+ 217:t6963.c       ****   //  reset/set.
+ 218:t6963.c       ****   if (reverse) // We're in dark-on-light mode...
+ 514               		.loc 1 218 0
+ 515 018a 9091 0000 		lds r25,reverse
+ 516 018e 4981      		ldd r20,Y+1
+ 517 0190 9923      		tst r25
+ 518 0192 01F0      		breq .L19
+ 219:t6963.c       ****   {
+ 220:t6963.c       ****     if (pixel == ON) // ...so ON corresponds to a pixel that is dark.
+ 519               		.loc 1 220 0
+ 520 0194 4111      		cpse r20,__zero_reg__
+ 521 0196 00C0      		rjmp .L23
+ 522 0198 00C0      		rjmp .L21
+ 523               	.L19:
+ 221:t6963.c       ****         t6963BitSR(bitIndex, PIX_DK);
+ 222:t6963.c       ****     else
+ 223:t6963.c       ****         t6963BitSR(bitIndex, PIX_LT);
+ 224:t6963.c       ****   }
+ 225:t6963.c       ****   else
+ 226:t6963.c       ****   {
+ 227:t6963.c       ****     if (pixel == ON) // ...so ON corresponds to a pixel that is light.
+ 524               		.loc 1 227 0
+ 525 019a 4111      		cpse r20,__zero_reg__
+ 526 019c 00C0      		rjmp .L21
+ 527               	.L23:
+ 528               	.LVL47:
+ 529               	.LBB47:
+ 530               	.LBB48:
+ 199:t6963.c       **** }
+ 531               		.loc 1 199 0
+ 532 019e 886F      		ori r24,lo8(-8)
+ 533               	.LVL48:
+ 534 01a0 00C0      		rjmp .L22
+ 535               	.LVL49:
+ 536               	.L21:
+ 537               	.LBE48:
+ 538               	.LBE47:
+ 539               	.LBB49:
+ 540               	.LBB50:
+ 541 01a2 806F      		ori r24,lo8(-16)
+ 542               	.LVL50:
+ 543               	.L22:
+ 544               	/* epilogue start */
+ 545               	.LBE50:
+ 546               	.LBE49:
+ 228:t6963.c       ****         t6963BitSR(bitIndex, PIX_LT);
+ 229:t6963.c       ****     else
+ 230:t6963.c       ****         t6963BitSR(bitIndex, PIX_DK);
+ 231:t6963.c       ****   }
+ 232:t6963.c       **** }
+ 547               		.loc 1 232 0
+ 548 01a4 0F90      		pop __tmp_reg__
+ 549 01a6 DF91      		pop r29
+ 550 01a8 CF91      		pop r28
+ 551 01aa 1F91      		pop r17
+ 552               	.LVL51:
+ 553               	.LBB52:
+ 554               	.LBB51:
+ 199:t6963.c       **** }
+ 555               		.loc 1 199 0
+ 556 01ac 0C94 0000 		jmp t6963WriteCmd
+ 557               	.LVL52:
+ 558               	.LBE51:
+ 559               	.LBE52:
+ 560               		.cfi_endproc
+ 561               	.LFE15:
+ 563               	.global	t6963ReadBlock
+ 565               	t6963ReadBlock:
+ 566               	.LFB16:
+ 233:t6963.c       **** 
+ 234:t6963.c       **** // Read an 8x8 block of pixels. Pixels in the t6963 world are in 8-bit blocks,
+ 235:t6963.c       **** //  so we may need to read up to 16 bytes of data and do some shifting around
+ 236:t6963.c       **** //  to get the data we want. The data that we return should be a buffer of
+ 237:t6963.c       **** //  columns; that is, the first byte in the buffer will be (x, y) to (x, y+7),
+ 238:t6963.c       **** //  and the last buffer should be (x+7, y) to (x+7, y+7). This sucks, b/c we
+ 239:t6963.c       **** //  are getting data from the display in the form (x, y) to (x+7, y) and we
+ 240:t6963.c       **** //  need to effectively rotate that matrix 90 degrees, bit by bit.
+ 241:t6963.c       **** void t6963ReadBlock(uint8_t x, uint8_t y, uint8_t *buffer)
+ 242:t6963.c       **** {
+ 567               		.loc 1 242 0
+ 568               		.cfi_startproc
+ 569               	.LVL53:
+ 570 01b0 9F92      		push r9
+ 571               	.LCFI17:
+ 572               		.cfi_def_cfa_offset 3
+ 573               		.cfi_offset 9, -2
+ 574 01b2 AF92      		push r10
+ 575               	.LCFI18:
+ 576               		.cfi_def_cfa_offset 4
+ 577               		.cfi_offset 10, -3
+ 578 01b4 BF92      		push r11
+ 579               	.LCFI19:
+ 580               		.cfi_def_cfa_offset 5
+ 581               		.cfi_offset 11, -4
+ 582 01b6 CF92      		push r12
+ 583               	.LCFI20:
+ 584               		.cfi_def_cfa_offset 6
+ 585               		.cfi_offset 12, -5
+ 586 01b8 DF92      		push r13
+ 587               	.LCFI21:
+ 588               		.cfi_def_cfa_offset 7
+ 589               		.cfi_offset 13, -6
+ 590 01ba EF92      		push r14
+ 591               	.LCFI22:
+ 592               		.cfi_def_cfa_offset 8
+ 593               		.cfi_offset 14, -7
+ 594 01bc FF92      		push r15
+ 595               	.LCFI23:
+ 596               		.cfi_def_cfa_offset 9
+ 597               		.cfi_offset 15, -8
+ 598 01be 0F93      		push r16
+ 599               	.LCFI24:
+ 600               		.cfi_def_cfa_offset 10
+ 601               		.cfi_offset 16, -9
+ 602 01c0 1F93      		push r17
+ 603               	.LCFI25:
+ 604               		.cfi_def_cfa_offset 11
+ 605               		.cfi_offset 17, -10
+ 606 01c2 CF93      		push r28
+ 607               	.LCFI26:
+ 608               		.cfi_def_cfa_offset 12
+ 609               		.cfi_offset 28, -11
+ 610 01c4 DF93      		push r29
+ 611               	.LCFI27:
+ 612               		.cfi_def_cfa_offset 13
+ 613               		.cfi_offset 29, -12
+ 614 01c6 CDB7      		in r28,__SP_L__
+ 615 01c8 DEB7      		in r29,__SP_H__
+ 616               	.LCFI28:
+ 617               		.cfi_def_cfa_register 28
+ 618 01ca 2A97      		sbiw r28,10
+ 619               	.LCFI29:
+ 620               		.cfi_def_cfa_offset 23
+ 621 01cc 0FB6      		in __tmp_reg__,__SREG__
+ 622 01ce F894      		cli
+ 623 01d0 DEBF      		out __SP_H__,r29
+ 624 01d2 0FBE      		out __SREG__,__tmp_reg__
+ 625 01d4 CDBF      		out __SP_L__,r28
+ 626               	/* prologue: function */
+ 627               	/* frame size = 10 */
+ 628               	/* stack size = 21 */
+ 629               	.L__stack_usage = 21
+ 630 01d6 C82E      		mov r12,r24
+ 631 01d8 A62E      		mov r10,r22
+ 632               	.LVL54:
+ 633               		.loc 1 242 0
+ 634 01da CE01      		movw r24,r28
+ 635               	.LVL55:
+ 636 01dc 0196      		adiw r24,1
+ 637 01de 7C01      		movw r14,r24
+ 638               	.LBB53:
+ 243:t6963.c       ****   uint8_t firstColBuffer, secondColBuffer;
+ 244:t6963.c       ****   uint8_t dataBuffer[8];
+ 245:t6963.c       ****   for (uint8_t i = 0; i < 8; i++)
+ 639               		.loc 1 245 0
+ 640 01e0 D12C      		mov r13,__zero_reg__
+ 246:t6963.c       ****   {
+ 247:t6963.c       ****     t6963SetPointer(x,y+i); // This sets our pointer to the location containing
+ 248:t6963.c       ****                             //  the first pixel of interest.
+ 249:t6963.c       ****     t6963WriteCmd(0xc1);    // Read data command, increment pointer.
+ 250:t6963.c       ****     firstColBuffer = t6963ReadData(); // Read the data.
+ 251:t6963.c       ****     t6963WriteCmd(0xc5);    // Read data command, don't change pointer.
+ 252:t6963.c       ****     secondColBuffer = t6963ReadData(); // Read the data.
+ 253:t6963.c       ****     // Okay, so now we have the data we're interested in. We'll need to
+ 254:t6963.c       ****     //  bit-shift it; if the data spans two bytes, we need to put those two
+ 255:t6963.c       ****     //  bytes into one.
+ 256:t6963.c       ****     dataBuffer[i] = firstColBuffer<<(x%8);
+ 641               		.loc 1 256 0
+ 642 01e2 9C2D      		mov r25,r12
+ 643 01e4 9770      		andi r25,lo8(7)
+ 644 01e6 B92E      		mov r11,r25
+ 257:t6963.c       ****     dataBuffer[i] |= secondColBuffer>>(8 - (x%8));
+ 645               		.loc 1 257 0
+ 646 01e8 08E0      		ldi r16,lo8(8)
+ 647 01ea 10E0      		ldi r17,0
+ 648 01ec 091B      		sub r16,r25
+ 649 01ee 1109      		sbc r17,__zero_reg__
+ 650               	.LVL56:
+ 651               	.L26:
+ 652 01f0 6D2D      		mov r22,r13
+ 653 01f2 6A0D      		add r22,r10
+ 247:t6963.c       ****                             //  the first pixel of interest.
+ 654               		.loc 1 247 0 discriminator 2
+ 655 01f4 8C2D      		mov r24,r12
+ 656 01f6 4987      		std Y+9,r20
+ 657 01f8 5A87      		std Y+10,r21
+ 658 01fa 0E94 0000 		call t6963SetPointer
+ 659               	.LVL57:
+ 249:t6963.c       ****     firstColBuffer = t6963ReadData(); // Read the data.
+ 660               		.loc 1 249 0 discriminator 2
+ 661 01fe 81EC      		ldi r24,lo8(-63)
+ 662 0200 0E94 0000 		call t6963WriteCmd
+ 663               	.LVL58:
+ 250:t6963.c       ****     t6963WriteCmd(0xc5);    // Read data command, don't change pointer.
+ 664               		.loc 1 250 0 discriminator 2
+ 665 0204 0E94 0000 		call t6963ReadData
+ 666               	.LVL59:
+ 667 0208 982E      		mov r9,r24
+ 668               	.LVL60:
+ 251:t6963.c       ****     secondColBuffer = t6963ReadData(); // Read the data.
+ 669               		.loc 1 251 0 discriminator 2
+ 670 020a 85EC      		ldi r24,lo8(-59)
+ 671 020c 0E94 0000 		call t6963WriteCmd
+ 672               	.LVL61:
+ 252:t6963.c       ****     // Okay, so now we have the data we're interested in. We'll need to
+ 673               		.loc 1 252 0 discriminator 2
+ 674 0210 0E94 0000 		call t6963ReadData
+ 675               	.LVL62:
+ 676               		.loc 1 257 0 discriminator 2
+ 677 0214 282F      		mov r18,r24
+ 678 0216 30E0      		ldi r19,0
+ 679 0218 002E      		mov r0,r16
+ 680 021a 00C0      		rjmp 2f
+ 681               		1:
+ 682 021c 3595      		asr r19
+ 683 021e 2795      		ror r18
+ 684               		2:
+ 685 0220 0A94      		dec r0
+ 686 0222 02F4      		brpl 1b
+ 256:t6963.c       ****     dataBuffer[i] |= secondColBuffer>>(8 - (x%8));
+ 687               		.loc 1 256 0 discriminator 2
+ 688 0224 992D      		mov r25,r9
+ 689 0226 0B2C      		mov r0,r11
+ 690 0228 00C0      		rjmp 2f
+ 691               		1:
+ 692 022a 990F      		lsl r25
+ 693               		2:
+ 694 022c 0A94      		dec r0
+ 695 022e 02F4      		brpl 1b
+ 696               		.loc 1 257 0 discriminator 2
+ 697 0230 922B      		or r25,r18
+ 698 0232 F701      		movw r30,r14
+ 699 0234 9193      		st Z+,r25
+ 700 0236 7F01      		movw r14,r30
+ 245:t6963.c       ****   {
+ 701               		.loc 1 245 0 discriminator 2
+ 702 0238 D394      		inc r13
+ 703               	.LVL63:
+ 704 023a 4985      		ldd r20,Y+9
+ 705 023c 5A85      		ldd r21,Y+10
+ 706 023e F8E0      		ldi r31,lo8(8)
+ 707 0240 DF12      		cpse r13,r31
+ 708 0242 00C0      		rjmp .L26
+ 709 0244 FA01      		movw r30,r20
+ 245:t6963.c       ****   {
+ 710               		.loc 1 245 0 is_stmt 0
+ 711 0246 78E0      		ldi r23,lo8(8)
+ 712               	.LBE53:
+ 713               	.LBB54:
+ 714               	.LBB55:
+ 258:t6963.c       ****   }
+ 259:t6963.c       ****   // dataBuffer now contains the block data, with dataBuffer[0] being the top
+ 260:t6963.c       ****   //  row. We need to make buffer[0] contain bit 0 of each of dataBuffer's
+ 261:t6963.c       ****   //  elements, buffer[1] contain bit 1, etc etc.
+ 262:t6963.c       ****   for (uint8_t i = 0; i < 8; i++)
+ 263:t6963.c       ****   {
+ 264:t6963.c       ****     buffer[i] = 0; // Before we start OR-ing stuff into this, make sure the
+ 265:t6963.c       ****                    //  address is clean!
+ 266:t6963.c       ****     for (uint8_t j = 0; j <8; j++)
+ 267:t6963.c       ****     {
+ 268:t6963.c       ****       buffer[i] |= (dataBuffer[j]&(0x01<<j));
+ 715               		.loc 1 268 0 is_stmt 1
+ 716 0248 21E0      		ldi r18,lo8(1)
+ 717 024a 30E0      		ldi r19,0
+ 718               	.LVL64:
+ 719               	.L30:
+ 720               	.LBE55:
+ 721               	.LBE54:
+ 722               	.LBB57:
+ 245:t6963.c       ****   {
+ 723               		.loc 1 245 0
+ 724 024c DE01      		movw r26,r28
+ 725 024e 1196      		adiw r26,1
+ 726 0250 80E0      		ldi r24,0
+ 727 0252 90E0      		ldi r25,0
+ 728 0254 10E0      		ldi r17,0
+ 729               	.LVL65:
+ 730               	.L28:
+ 731               	.LBE57:
+ 732               	.LBB58:
+ 733               	.LBB56:
+ 734               		.loc 1 268 0 discriminator 2
+ 735 0256 6D91      		ld r22,X+
+ 736 0258 A901      		movw r20,r18
+ 737 025a 082E      		mov r0,r24
+ 738 025c 00C0      		rjmp 2f
+ 739               		1:
+ 740 025e 440F      		lsl r20
+ 741               		2:
+ 742 0260 0A94      		dec r0
+ 743 0262 02F4      		brpl 1b
+ 744 0264 6423      		and r22,r20
+ 745 0266 612B      		or r22,r17
+ 746               	.LVL66:
+ 747 0268 0196      		adiw r24,1
+ 748               	.LVL67:
+ 266:t6963.c       ****     {
+ 749               		.loc 1 266 0 discriminator 2
+ 750 026a 8830      		cpi r24,8
+ 751 026c 9105      		cpc r25,__zero_reg__
+ 752 026e 01F0      		breq .L27
+ 753               		.loc 1 268 0
+ 754 0270 162F      		mov r17,r22
+ 755 0272 00C0      		rjmp .L28
+ 756               	.L27:
+ 757 0274 6193      		st Z+,r22
+ 758               	.LVL68:
+ 759 0276 7150      		subi r23,lo8(-(-1))
+ 760               	.LBE56:
+ 262:t6963.c       ****   {
+ 761               		.loc 1 262 0
+ 762 0278 01F4      		brne .L30
+ 763               	/* epilogue start */
+ 764               	.LBE58:
+ 269:t6963.c       ****     }
+ 270:t6963.c       ****   } 
+ 271:t6963.c       **** }...
+ 765               		.loc 1 271 0
+ 766 027a 2A96      		adiw r28,10
+ 767 027c 0FB6      		in __tmp_reg__,__SREG__
+ 768 027e F894      		cli
+ 769 0280 DEBF      		out __SP_H__,r29
+ 770 0282 0FBE      		out __SREG__,__tmp_reg__
+ 771 0284 CDBF      		out __SP_L__,r28
+ 772 0286 DF91      		pop r29
+ 773 0288 CF91      		pop r28
+ 774 028a 1F91      		pop r17
+ 775 028c 0F91      		pop r16
+ 776 028e FF90      		pop r15
+ 777 0290 EF90      		pop r14
+ 778 0292 DF90      		pop r13
+ 779               	.LVL69:
+ 780 0294 CF90      		pop r12
+ 781               	.LVL70:
+ 782 0296 BF90      		pop r11
+ 783 0298 AF90      		pop r10
+ 784               	.LVL71:
+ 785 029a 9F90      		pop r9
+ 786               	.LVL72:
+ 787 029c 0895      		ret
+ 788               		.cfi_endproc
+ 789               	.LFE16:
+ 791               	.Letext0:
+ 792               		.file 3 "/usr/lib/avr/include/stdint.h"
+ 793               		.file 4 "glcdbp.h"
+ 794               		.file 5 "io_support.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 t6963.c
+     /tmp/ccDMWweC.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccDMWweC.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccDMWweC.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccDMWweC.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccDMWweC.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccDMWweC.s:12     .text:0000000000000000 t6963ReadStatus
+     /tmp/ccDMWweC.s:62     .text:0000000000000022 t6963BusyWait
+     /tmp/ccDMWweC.s:86     .text:000000000000002c t6963WriteData
+     /tmp/ccDMWweC.s:161    .text:000000000000006a t6963ReadData
+     /tmp/ccDMWweC.s:214    .text:0000000000000094 t6963WriteCmd
+     /tmp/ccDMWweC.s:296    .text:00000000000000d6 t6963SetPointer
+     /tmp/ccDMWweC.s:349    .text:0000000000000104 t6963Clear
+     /tmp/ccDMWweC.s:409    .text:0000000000000138 t6963DisplayInit
+     /tmp/ccDMWweC.s:454    .text:0000000000000168 t6963BitSR
+     /tmp/ccDMWweC.s:476    .text:0000000000000170 t6963DrawPixel
+     /tmp/ccDMWweC.s:565    .text:00000000000001b0 t6963ReadBlock
+
+UNDEFINED SYMBOLS
+readData
+setData
+reverse

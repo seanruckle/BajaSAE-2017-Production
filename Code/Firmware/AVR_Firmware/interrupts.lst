@@ -1,0 +1,144 @@
+   1               		.file	"interrupts.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	__vector_18
+  12               	__vector_18:
+  13               	.LFB0:
+  14               		.file 1 "interrupts.c"
+   1:interrupts.c  **** /***************************************************************************
+   2:interrupts.c  **** interrupts.c
+   3:interrupts.c  **** 
+   4:interrupts.c  **** Interrupt definition file for the serial graphical LCD backpack project. The
+   5:interrupts.c  ****  only actual interrupt handler is the serial receive handler. It lives here.
+   6:interrupts.c  **** 
+   7:interrupts.c  **** 02 May 2013 - Mike Hord, SparkFun Electronics
+   8:interrupts.c  **** 
+   9:interrupts.c  **** This code is released under the Creative Commons Attribution Share-Alike 3.0
+  10:interrupts.c  ****  license. You are free to reuse, remix, or redistribute it as you see fit,
+  11:interrupts.c  ****  so long as you provide attribution to SparkFun Electronics.
+  12:interrupts.c  **** 
+  13:interrupts.c  **** ***************************************************************************/
+  14:interrupts.c  **** 
+  15:interrupts.c  **** #include <avr/interrupt.h>
+  16:interrupts.c  **** #include "glcdbp.h"
+  17:interrupts.c  **** 
+  18:interrupts.c  **** extern volatile uint8_t 	rxRingBuffer[BUF_DEPTH];
+  19:interrupts.c  **** extern volatile uint16_t 	rxRingHead;
+  20:interrupts.c  **** extern volatile uint16_t	rxRingTail;
+  21:interrupts.c  **** extern volatile uint8_t	 bufferSize;
+  22:interrupts.c  **** 
+  23:interrupts.c  **** // Handler for USART receive interrupts. This is basically just a stack push
+  24:interrupts.c  **** //  for the FIFO we use to store incoming commands. Note that there is no
+  25:interrupts.c  **** //  overflow; that might be a nice touch but so far, I haven't even come close
+  26:interrupts.c  **** //  to hitting the buffer depth. In fact, I've never exceeded a depth of more
+  27:interrupts.c  **** //  than two or three bytes.
+  28:interrupts.c  **** ISR(USART_RX_vect)
+  29:interrupts.c  **** {
+  15               		.loc 1 29 0
+  16               		.cfi_startproc
+  17 0000 1F92      		push r1
+  18               	.LCFI0:
+  19               		.cfi_def_cfa_offset 3
+  20               		.cfi_offset 1, -2
+  21 0002 0F92      		push r0
+  22               	.LCFI1:
+  23               		.cfi_def_cfa_offset 4
+  24               		.cfi_offset 0, -3
+  25 0004 0FB6      		in r0,__SREG__
+  26 0006 0F92      		push r0
+  27 0008 1124      		clr __zero_reg__
+  28 000a 2F93      		push r18
+  29               	.LCFI2:
+  30               		.cfi_def_cfa_offset 5
+  31               		.cfi_offset 18, -4
+  32 000c 3F93      		push r19
+  33               	.LCFI3:
+  34               		.cfi_def_cfa_offset 6
+  35               		.cfi_offset 19, -5
+  36 000e 8F93      		push r24
+  37               	.LCFI4:
+  38               		.cfi_def_cfa_offset 7
+  39               		.cfi_offset 24, -6
+  40 0010 9F93      		push r25
+  41               	.LCFI5:
+  42               		.cfi_def_cfa_offset 8
+  43               		.cfi_offset 25, -7
+  44 0012 EF93      		push r30
+  45               	.LCFI6:
+  46               		.cfi_def_cfa_offset 9
+  47               		.cfi_offset 30, -8
+  48 0014 FF93      		push r31
+  49               	.LCFI7:
+  50               		.cfi_def_cfa_offset 10
+  51               		.cfi_offset 31, -9
+  52               	/* prologue: Signal */
+  53               	/* frame size = 0 */
+  54               	/* stack size = 9 */
+  55               	.L__stack_usage = 9
+  30:interrupts.c  **** 	if (rxRingHead == BUF_DEPTH) rxRingHead = 0;
+  56               		.loc 1 30 0
+  57 0016 8091 0000 		lds r24,rxRingHead
+  58 001a 9091 0000 		lds r25,rxRingHead+1
+  59 001e 8115      		cp r24,__zero_reg__
+  60 0020 9140      		sbci r25,1
+  61 0022 01F4      		brne .L2
+  62               		.loc 1 30 0 is_stmt 0 discriminator 1
+  63 0024 1092 0000 		sts rxRingHead+1,__zero_reg__
+  64 0028 1092 0000 		sts rxRingHead,__zero_reg__
+  65               	.L2:
+  31:interrupts.c  **** 	bufferSize++;
+  66               		.loc 1 31 0 is_stmt 1
+  67 002c 8091 0000 		lds r24,bufferSize
+  68 0030 8F5F      		subi r24,lo8(-(1))
+  69 0032 8093 0000 		sts bufferSize,r24
+  32:interrupts.c  **** 	rxRingBuffer[rxRingHead++] = UDR0;
+  70               		.loc 1 32 0
+  71 0036 8091 0000 		lds r24,rxRingHead
+  72 003a 9091 0000 		lds r25,rxRingHead+1
+  73 003e 9C01      		movw r18,r24
+  74 0040 2F5F      		subi r18,-1
+  75 0042 3F4F      		sbci r19,-1
+  76 0044 3093 0000 		sts rxRingHead+1,r19
+  77 0048 2093 0000 		sts rxRingHead,r18
+  78 004c 2091 C600 		lds r18,198
+  79 0050 FC01      		movw r30,r24
+  80 0052 E050      		subi r30,lo8(-(rxRingBuffer))
+  81 0054 F040      		sbci r31,hi8(-(rxRingBuffer))
+  82 0056 2083      		st Z,r18
+  83               	/* epilogue start */
+  33:interrupts.c  **** }
+  84               		.loc 1 33 0
+  85 0058 FF91      		pop r31
+  86 005a EF91      		pop r30
+  87 005c 9F91      		pop r25
+  88 005e 8F91      		pop r24
+  89 0060 3F91      		pop r19
+  90 0062 2F91      		pop r18
+  91 0064 0F90      		pop r0
+  92 0066 0FBE      		out __SREG__,r0
+  93 0068 0F90      		pop r0
+  94 006a 1F90      		pop r1
+  95 006c 1895      		reti
+  96               		.cfi_endproc
+  97               	.LFE0:
+  99               	.Letext0:
+ 100               		.file 2 "/usr/lib/avr/include/stdint.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 interrupts.c
+     /tmp/ccnuXKhK.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccnuXKhK.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccnuXKhK.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccnuXKhK.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccnuXKhK.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccnuXKhK.s:12     .text:0000000000000000 __vector_18
+
+UNDEFINED SYMBOLS
+rxRingHead
+bufferSize
+rxRingBuffer

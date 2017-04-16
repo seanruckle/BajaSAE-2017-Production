@@ -1,0 +1,792 @@
+   1               		.file	"demo.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	demo
+  12               	demo:
+  13               	.LFB7:
+  14               		.file 1 "demo.c"
+   1:demo.c        **** /***************************************************************************
+   2:demo.c        **** demo.c
+   3:demo.c        **** 
+   4:demo.c        **** Demo mode support file for the graphic lcd backpack. I put this in one file
+   5:demo.c        ****  to make editing it easy and clean, and to make removing it to free up
+   6:demo.c        ****  memory easy.
+   7:demo.c        **** 
+   8:demo.c        **** 02 May 2013 - Mike Hord, SparkFun Electronics
+   9:demo.c        **** 
+  10:demo.c        **** This code is released under the Creative Commons Attribution Share-Alike 3.0
+  11:demo.c        ****  license. You are free to reuse, remix, or redistribute it as you see fit,
+  12:demo.c        ****  so long as you provide attribution to SparkFun Electronics.
+  13:demo.c        **** 
+  14:demo.c        **** ***************************************************************************/
+  15:demo.c        **** 
+  16:demo.c        **** #include <avr/pgmspace.h> 
+  17:demo.c        **** #include <util/delay.h>
+  18:demo.c        **** #include "lcd.h"
+  19:demo.c        **** #include "demo.h"
+  20:demo.c        **** #include "serial.h"
+  21:demo.c        **** #include "glcdbp.h"
+  22:demo.c        **** 
+  23:demo.c        **** // These variables are defined in lcd.c, and form the backbone of the pseudo
+  24:demo.c        **** //  terminal text handling system.
+  25:demo.c        **** extern uint8_t  cursorPos[];
+  26:demo.c        **** extern uint8_t  textOrigin[];
+  27:demo.c        **** extern uint16_t textLength;
+  28:demo.c        **** extern uint8_t  yDim;
+  29:demo.c        **** extern uint8_t  xDim;
+  30:demo.c        **** 
+  31:demo.c        **** void demo(void)
+  32:demo.c        **** {
+  15               		.loc 1 32 0
+  16               		.cfi_startproc
+  17 0000 BF92      		push r11
+  18               	.LCFI0:
+  19               		.cfi_def_cfa_offset 3
+  20               		.cfi_offset 11, -2
+  21 0002 CF92      		push r12
+  22               	.LCFI1:
+  23               		.cfi_def_cfa_offset 4
+  24               		.cfi_offset 12, -3
+  25 0004 DF92      		push r13
+  26               	.LCFI2:
+  27               		.cfi_def_cfa_offset 5
+  28               		.cfi_offset 13, -4
+  29 0006 EF92      		push r14
+  30               	.LCFI3:
+  31               		.cfi_def_cfa_offset 6
+  32               		.cfi_offset 14, -5
+  33 0008 FF92      		push r15
+  34               	.LCFI4:
+  35               		.cfi_def_cfa_offset 7
+  36               		.cfi_offset 15, -6
+  37 000a 0F93      		push r16
+  38               	.LCFI5:
+  39               		.cfi_def_cfa_offset 8
+  40               		.cfi_offset 16, -7
+  41 000c 1F93      		push r17
+  42               	.LCFI6:
+  43               		.cfi_def_cfa_offset 9
+  44               		.cfi_offset 17, -8
+  45 000e CF93      		push r28
+  46               	.LCFI7:
+  47               		.cfi_def_cfa_offset 10
+  48               		.cfi_offset 28, -9
+  49 0010 DF93      		push r29
+  50               	.LCFI8:
+  51               		.cfi_def_cfa_offset 11
+  52               		.cfi_offset 29, -10
+  53 0012 CDB7      		in r28,__SP_L__
+  54 0014 DEB7      		in r29,__SP_H__
+  55               	.LCFI9:
+  56               		.cfi_def_cfa_register 28
+  57 0016 C054      		subi r28,64
+  58 0018 D109      		sbc r29,__zero_reg__
+  59               	.LCFI10:
+  60               		.cfi_def_cfa_offset 75
+  61 001a 0FB6      		in __tmp_reg__,__SREG__
+  62 001c F894      		cli
+  63 001e DEBF      		out __SP_H__,r29
+  64 0020 0FBE      		out __SREG__,__tmp_reg__
+  65 0022 CDBF      		out __SP_L__,r28
+  66               	/* prologue: function */
+  67               	/* frame size = 64 */
+  68               	/* stack size = 73 */
+  69               	.L__stack_usage = 73
+  70               	.LVL0:
+  71 0024 00E0      		ldi r16,lo8(wantYouGone)
+  72 0026 10E0      		ldi r17,hi8(wantYouGone)
+  73               		.loc 1 32 0
+  74 0028 2DEF      		ldi r18,lo8(-3)
+  75 002a F22E      		mov r15,r18
+  76               	.LVL1:
+  77               	.L7:
+  78               	.LBB13:
+  33:demo.c        ****   char buffer[64];
+  34:demo.c        ****   uint8_t i = 0;
+  35:demo.c        ****   uint8_t j = 0;
+  36:demo.c        ****   
+  37:demo.c        ****   // We're going to start out by printing some strings that are stored in
+  38:demo.c        ****   //  flash memory.
+  39:demo.c        ****   for (i = 0; i<6; i++)
+  40:demo.c        ****   {
+  41:demo.c        ****     // Copy the string from flash into a RAM buffer.
+  42:demo.c        ****     strcpy_P(buffer, (PGM_P)pgm_read_word(&(wantYouGone[i])));
+  79               		.loc 1 42 0
+  80 002c F801      		movw r30,r16
+  81               	/* #APP */
+  82               	 ;  42 "demo.c" 1
+  83 002e 6591      		lpm r22, Z+
+  84 0030 7491      		lpm r23, Z
+  85               		
+  86               	 ;  0 "" 2
+  87               	.LVL2:
+  88               	/* #NOAPP */
+  89               	.LBE13:
+  90 0032 CE01      		movw r24,r28
+  91 0034 0196      		adiw r24,1
+  92 0036 0E94 0000 		call strcpy_P
+  93               	.LVL3:
+  43:demo.c        ****     // Iterate over the buffer until you hit the end, drawing each character
+  44:demo.c        ****     //  as it is encountered and delaying between lines.
+  45:demo.c        ****     while(buffer[j] != '\0')
+  94               		.loc 1 45 0
+  95 003a E12C      		mov r14,__zero_reg__
+  96               	.LVL4:
+  97               	.L2:
+  98               		.loc 1 45 0 is_stmt 0 discriminator 1
+  99 003c E1E0      		ldi r30,lo8(1)
+ 100 003e F0E0      		ldi r31,0
+ 101 0040 EC0F      		add r30,r28
+ 102 0042 FD1F      		adc r31,r29
+ 103 0044 EE0D      		add r30,r14
+ 104 0046 F11D      		adc r31,__zero_reg__
+ 105 0048 8081      		ld r24,Z
+ 106 004a 8823      		tst r24
+ 107 004c 01F0      		breq .L24
+  46:demo.c        ****     {
+  47:demo.c        ****       lcdDrawChar(buffer[j++]);
+ 108               		.loc 1 47 0 is_stmt 1
+ 109 004e E394      		inc r14
+ 110               	.LVL5:
+ 111 0050 0E94 0000 		call lcdDrawChar
+ 112               	.LVL6:
+ 113 0054 00C0      		rjmp .L2
+ 114               	.L24:
+  48:demo.c        ****     }
+  49:demo.c        ****     lcdDrawChar('\r');
+ 115               		.loc 1 49 0
+ 116 0056 8DE0      		ldi r24,lo8(13)
+ 117 0058 0E94 0000 		call lcdDrawChar
+ 118               	.LVL7:
+ 119               	.LBB14:
+ 120               	.LBB15:
+ 121               		.file 2 "/usr/lib/avr/include/util/delay.h"
+   1:/usr/lib/avr/include/util/delay.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   2:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2004,2005,2007 Joerg Wunsch
+   3:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2007  Florin-Viorel Petrov
+   4:/usr/lib/avr/include/util/delay.h ****    All rights reserved.
+   5:/usr/lib/avr/include/util/delay.h **** 
+   6:/usr/lib/avr/include/util/delay.h ****    Redistribution and use in source and binary forms, with or without
+   7:/usr/lib/avr/include/util/delay.h ****    modification, are permitted provided that the following conditions are met:
+   8:/usr/lib/avr/include/util/delay.h **** 
+   9:/usr/lib/avr/include/util/delay.h ****    * Redistributions of source code must retain the above copyright
+  10:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer.
+  11:/usr/lib/avr/include/util/delay.h **** 
+  12:/usr/lib/avr/include/util/delay.h ****    * Redistributions in binary form must reproduce the above copyright
+  13:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer in
+  14:/usr/lib/avr/include/util/delay.h ****      the documentation and/or other materials provided with the
+  15:/usr/lib/avr/include/util/delay.h ****      distribution.
+  16:/usr/lib/avr/include/util/delay.h **** 
+  17:/usr/lib/avr/include/util/delay.h ****    * Neither the name of the copyright holders nor the names of
+  18:/usr/lib/avr/include/util/delay.h ****      contributors may be used to endorse or promote products derived
+  19:/usr/lib/avr/include/util/delay.h ****      from this software without specific prior written permission.
+  20:/usr/lib/avr/include/util/delay.h **** 
+  21:/usr/lib/avr/include/util/delay.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  22:/usr/lib/avr/include/util/delay.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  23:/usr/lib/avr/include/util/delay.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  24:/usr/lib/avr/include/util/delay.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  25:/usr/lib/avr/include/util/delay.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  26:/usr/lib/avr/include/util/delay.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  27:/usr/lib/avr/include/util/delay.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  28:/usr/lib/avr/include/util/delay.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  29:/usr/lib/avr/include/util/delay.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  30:/usr/lib/avr/include/util/delay.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  31:/usr/lib/avr/include/util/delay.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  32:/usr/lib/avr/include/util/delay.h **** 
+  33:/usr/lib/avr/include/util/delay.h **** /* $Id$ */
+  34:/usr/lib/avr/include/util/delay.h **** 
+  35:/usr/lib/avr/include/util/delay.h **** #ifndef _UTIL_DELAY_H_
+  36:/usr/lib/avr/include/util/delay.h **** #define _UTIL_DELAY_H_ 1
+  37:/usr/lib/avr/include/util/delay.h **** 
+  38:/usr/lib/avr/include/util/delay.h **** #ifndef __HAS_DELAY_CYCLES
+  39:/usr/lib/avr/include/util/delay.h **** #define __HAS_DELAY_CYCLES 1
+  40:/usr/lib/avr/include/util/delay.h **** #endif
+  41:/usr/lib/avr/include/util/delay.h **** 
+  42:/usr/lib/avr/include/util/delay.h **** #include <inttypes.h>
+  43:/usr/lib/avr/include/util/delay.h **** #include <util/delay_basic.h>
+  44:/usr/lib/avr/include/util/delay.h **** #include <math.h>
+  45:/usr/lib/avr/include/util/delay.h **** 
+  46:/usr/lib/avr/include/util/delay.h **** /** \file */
+  47:/usr/lib/avr/include/util/delay.h **** /** \defgroup util_delay <util/delay.h>: Convenience functions for busy-wait delay loops
+  48:/usr/lib/avr/include/util/delay.h ****     \code
+  49:/usr/lib/avr/include/util/delay.h ****     #define F_CPU 1000000UL  // 1 MHz
+  50:/usr/lib/avr/include/util/delay.h ****     //#define F_CPU 14.7456E6
+  51:/usr/lib/avr/include/util/delay.h ****     #include <util/delay.h>
+  52:/usr/lib/avr/include/util/delay.h ****     \endcode
+  53:/usr/lib/avr/include/util/delay.h **** 
+  54:/usr/lib/avr/include/util/delay.h ****     \note As an alternative method, it is possible to pass the
+  55:/usr/lib/avr/include/util/delay.h ****     F_CPU macro down to the compiler from the Makefile.
+  56:/usr/lib/avr/include/util/delay.h ****     Obviously, in that case, no \c \#define statement should be
+  57:/usr/lib/avr/include/util/delay.h ****     used.
+  58:/usr/lib/avr/include/util/delay.h **** 
+  59:/usr/lib/avr/include/util/delay.h ****     The functions in this header file are wrappers around the basic
+  60:/usr/lib/avr/include/util/delay.h ****     busy-wait functions from <util/delay_basic.h>.  They are meant as
+  61:/usr/lib/avr/include/util/delay.h ****     convenience functions where actual time values can be specified
+  62:/usr/lib/avr/include/util/delay.h ****     rather than a number of cycles to wait for.  The idea behind is
+  63:/usr/lib/avr/include/util/delay.h ****     that compile-time constant expressions will be eliminated by
+  64:/usr/lib/avr/include/util/delay.h ****     compiler optimization so floating-point expressions can be used
+  65:/usr/lib/avr/include/util/delay.h ****     to calculate the number of delay cycles needed based on the CPU
+  66:/usr/lib/avr/include/util/delay.h ****     frequency passed by the macro F_CPU.
+  67:/usr/lib/avr/include/util/delay.h **** 
+  68:/usr/lib/avr/include/util/delay.h ****     \note In order for these functions to work as intended, compiler
+  69:/usr/lib/avr/include/util/delay.h ****     optimizations <em>must</em> be enabled, and the delay time
+  70:/usr/lib/avr/include/util/delay.h ****     <em>must</em> be an expression that is a known constant at
+  71:/usr/lib/avr/include/util/delay.h ****     compile-time.  If these requirements are not met, the resulting
+  72:/usr/lib/avr/include/util/delay.h ****     delay will be much longer (and basically unpredictable), and
+  73:/usr/lib/avr/include/util/delay.h ****     applications that otherwise do not use floating-point calculations
+  74:/usr/lib/avr/include/util/delay.h ****     will experience severe code bloat by the floating-point library
+  75:/usr/lib/avr/include/util/delay.h ****     routines linked into the application.
+  76:/usr/lib/avr/include/util/delay.h **** 
+  77:/usr/lib/avr/include/util/delay.h ****     The functions available allow the specification of microsecond, and
+  78:/usr/lib/avr/include/util/delay.h ****     millisecond delays directly, using the application-supplied macro
+  79:/usr/lib/avr/include/util/delay.h ****     F_CPU as the CPU clock frequency (in Hertz).
+  80:/usr/lib/avr/include/util/delay.h **** 
+  81:/usr/lib/avr/include/util/delay.h **** */
+  82:/usr/lib/avr/include/util/delay.h **** 
+  83:/usr/lib/avr/include/util/delay.h **** #if !defined(__DOXYGEN__)
+  84:/usr/lib/avr/include/util/delay.h **** static inline void _delay_us(double __us) __attribute__((always_inline));
+  85:/usr/lib/avr/include/util/delay.h **** static inline void _delay_ms(double __ms) __attribute__((always_inline));
+  86:/usr/lib/avr/include/util/delay.h **** #endif
+  87:/usr/lib/avr/include/util/delay.h **** 
+  88:/usr/lib/avr/include/util/delay.h **** #ifndef F_CPU
+  89:/usr/lib/avr/include/util/delay.h **** /* prevent compiler error by supplying a default */
+  90:/usr/lib/avr/include/util/delay.h **** # warning "F_CPU not defined for <util/delay.h>"
+  91:/usr/lib/avr/include/util/delay.h **** # define F_CPU 1000000UL
+  92:/usr/lib/avr/include/util/delay.h **** #endif
+  93:/usr/lib/avr/include/util/delay.h **** 
+  94:/usr/lib/avr/include/util/delay.h **** #ifndef __OPTIMIZE__
+  95:/usr/lib/avr/include/util/delay.h **** # warning "Compiler optimizations disabled; functions from <util/delay.h> won't work as designed"
+  96:/usr/lib/avr/include/util/delay.h **** #endif
+  97:/usr/lib/avr/include/util/delay.h **** 
+  98:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+  99:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 100:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 101:/usr/lib/avr/include/util/delay.h **** #  include <math.h>
+ 102:/usr/lib/avr/include/util/delay.h **** #endif
+ 103:/usr/lib/avr/include/util/delay.h **** 
+ 104:/usr/lib/avr/include/util/delay.h **** /**
+ 105:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 106:/usr/lib/avr/include/util/delay.h **** 
+ 107:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __ms milliseconds, using _delay_loop_2().
+ 108:/usr/lib/avr/include/util/delay.h **** 
+ 109:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 110:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 111:/usr/lib/avr/include/util/delay.h **** 
+ 112:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 262.14 ms / F_CPU in MHz.
+ 113:/usr/lib/avr/include/util/delay.h **** 
+ 114:/usr/lib/avr/include/util/delay.h ****    When the user request delay which exceed the maximum possible one,
+ 115:/usr/lib/avr/include/util/delay.h ****    _delay_ms() provides a decreased resolution functionality. In this
+ 116:/usr/lib/avr/include/util/delay.h ****    mode _delay_ms() will work with a resolution of 1/10 ms, providing
+ 117:/usr/lib/avr/include/util/delay.h ****    delays up to 6.5535 seconds (independent from CPU frequency).  The
+ 118:/usr/lib/avr/include/util/delay.h ****    user will not be informed about decreased resolution.
+ 119:/usr/lib/avr/include/util/delay.h **** 
+ 120:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 121:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 ms/ F_CPU in MHz. For
+ 122:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflows results in
+ 123:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0ms.
+ 124:/usr/lib/avr/include/util/delay.h **** 
+ 125:/usr/lib/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 126:/usr/lib/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 127:/usr/lib/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 128:/usr/lib/avr/include/util/delay.h **** 
+ 129:/usr/lib/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 130:/usr/lib/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 131:/usr/lib/avr/include/util/delay.h **** 
+ 132:/usr/lib/avr/include/util/delay.h ****    Note: The new implementation of _delay_ms(double __ms) with 
+ 133:/usr/lib/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible. 
+ 134:/usr/lib/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 135:/usr/lib/avr/include/util/delay.h ****    Also, the backward compatible
+ 136:/usr/lib/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 137:/usr/lib/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 138:/usr/lib/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 139:/usr/lib/avr/include/util/delay.h **** 
+ 140:/usr/lib/avr/include/util/delay.h ****  */
+ 141:/usr/lib/avr/include/util/delay.h **** void
+ 142:/usr/lib/avr/include/util/delay.h **** _delay_ms(double __ms)
+ 143:/usr/lib/avr/include/util/delay.h **** {
+ 144:/usr/lib/avr/include/util/delay.h **** 	double __tmp ; 
+ 145:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 146:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 147:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 148:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 149:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 150:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e3) * __ms;
+ 151:/usr/lib/avr/include/util/delay.h **** 
+ 152:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 153:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 154:/usr/lib/avr/include/util/delay.h **** 
+ 155:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 156:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 157:/usr/lib/avr/include/util/delay.h **** 
+ 158:/usr/lib/avr/include/util/delay.h **** 	#else
+ 159:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 160:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 161:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 162:/usr/lib/avr/include/util/delay.h **** 
+ 163:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+ 122               		.loc 2 163 0
+ 123 005c 2FEF      		ldi r18,lo8(2399999)
+ 124 005e 8EE9      		ldi r24,hi8(2399999)
+ 125 0060 94E2      		ldi r25,hlo8(2399999)
+ 126 0062 2150      		1: subi r18,1
+ 127 0064 8040      		sbci r24,0
+ 128 0066 9040      		sbci r25,0
+ 129 0068 01F4      		brne 1b
+ 130 006a 00C0      		rjmp .
+ 131 006c 0000      		nop
+ 132               	.LVL8:
+ 133               	.LBE15:
+ 134               	.LBE14:
+  50:demo.c        ****     _delay_ms(750);
+  51:demo.c        ****     j = 0;  // Before each line, we need to reset our string counter.
+  52:demo.c        ****     // Also, for dramatic effect, we want to do a couple of things after
+  53:demo.c        ****     //  specific lines.
+  54:demo.c        ****     if ((i == 4) | (i == 3))
+ 135               		.loc 1 54 0
+ 136 006e 21E0      		ldi r18,lo8(1)
+ 137 0070 2F15      		cp r18,r15
+ 138 0072 00F0      		brlo .L4
+ 139               	.LVL9:
+ 140               	.LBB16:
+ 141               	.LBB17:
+ 142               		.loc 2 163 0
+ 143 0074 8FEF      		ldi r24,lo8(2399999)
+ 144 0076 9EE9      		ldi r25,hi8(2399999)
+ 145 0078 24E2      		ldi r18,hlo8(2399999)
+ 146 007a 8150      		1: subi r24,1
+ 147 007c 9040      		sbci r25,0
+ 148 007e 2040      		sbci r18,0
+ 149 0080 01F4      		brne 1b
+ 150 0082 00C0      		rjmp .
+ 151 0084 0000      		nop
+ 152               	.LBE17:
+ 153               	.LBE16:
+  55:demo.c        ****     {
+  56:demo.c        ****       _delay_ms(750);
+  57:demo.c        ****       lcdClearScreen();
+ 154               		.loc 1 57 0
+ 155 0086 0E94 0000 		call lcdClearScreen
+ 156               	.LVL10:
+  58:demo.c        ****       cursorPos[0] = 0;
+ 157               		.loc 1 58 0
+ 158 008a 1092 0000 		sts cursorPos,__zero_reg__
+  59:demo.c        ****       cursorPos[1] = (yDim/2)-8;
+ 159               		.loc 1 59 0
+ 160 008e 8091 0000 		lds r24,yDim
+ 161 0092 8695      		lsr r24
+ 162 0094 8850      		subi r24,lo8(-(-8))
+ 163 0096 8093 0000 		sts cursorPos+1,r24
+ 164               	.LVL11:
+ 165               	.L4:
+ 166 009a 0E5F      		subi r16,-2
+ 167 009c 1F4F      		sbci r17,-1
+ 168 009e F394      		inc r15
+ 169               	.LVL12:
+  39:demo.c        ****   {
+ 170               		.loc 1 39 0
+ 171 00a0 83E0      		ldi r24,lo8(3)
+ 172 00a2 F812      		cpse r15,r24
+ 173 00a4 00C0      		rjmp .L7
+ 174 00a6 DD24      		clr r13
+ 175 00a8 D394      		inc r13
+ 176 00aa F12C      		mov r15,__zero_reg__
+ 177               	.LVL13:
+  60:demo.c        ****     }      
+  61:demo.c        ****   }  
+  62:demo.c        ****   
+  63:demo.c        ****   // Okay, now we've finished that part- let's do some useful diagnostic stuff.
+  64:demo.c        ****   //  Let's draw a sprite-based checkerboard. Sprite 127 is probably just a
+  65:demo.c        ****   //  solid block; after all, that's what it is by default. We'll iterate over
+  66:demo.c        ****   //  the whole screen, drawing ON and OFF sprites.
+  67:demo.c        ****   
+  68:demo.c        ****   uint8_t onOff = 0x01;  // Is the first square ON or OFF?
+  69:demo.c        ****   for (j = 0; j<(yDim-7); j+=8)
+  70:demo.c        ****   {
+  71:demo.c        ****     for (i = 0; i<(xDim-7); i+=8)
+  72:demo.c        ****     {
+  73:demo.c        ****       if (onOff) lcdDrawSprite(i, j, 127, '0', ON);
+  74:demo.c        ****       else       lcdDrawSprite(i, j, 127, '0', OFF);
+  75:demo.c        ****       onOff ^= 0x01;
+ 178               		.loc 1 75 0
+ 179 00ac EE24      		clr r14
+ 180 00ae E394      		inc r14
+ 181               	.LVL14:
+ 182               	.L6:
+  69:demo.c        ****   {
+ 183               		.loc 1 69 0 discriminator 1
+ 184 00b0 2F2D      		mov r18,r15
+ 185 00b2 30E0      		ldi r19,0
+ 186 00b4 8091 0000 		lds r24,yDim
+ 187 00b8 90E0      		ldi r25,0
+ 188 00ba 0797      		sbiw r24,7
+ 189 00bc 2817      		cp r18,r24
+ 190 00be 3907      		cpc r19,r25
+ 191 00c0 04F4      		brge .L11
+  69:demo.c        ****   {
+ 192               		.loc 1 69 0 is_stmt 0
+ 193 00c2 10E0      		ldi r17,0
+ 194               	.L12:
+ 195               	.LVL15:
+  71:demo.c        ****     {
+ 196               		.loc 1 71 0 is_stmt 1 discriminator 1
+ 197 00c4 412F      		mov r20,r17
+ 198 00c6 50E0      		ldi r21,0
+ 199 00c8 2091 0000 		lds r18,xDim
+ 200 00cc 30E0      		ldi r19,0
+ 201 00ce 2750      		subi r18,7
+ 202 00d0 3109      		sbc r19,__zero_reg__
+ 203 00d2 4217      		cp r20,r18
+ 204 00d4 5307      		cpc r21,r19
+ 205 00d6 04F4      		brge .L25
+  73:demo.c        ****       else       lcdDrawSprite(i, j, 127, '0', OFF);
+ 206               		.loc 1 73 0
+ 207 00d8 DD20      		tst r13
+ 208 00da 01F0      		breq .L8
+  73:demo.c        ****       else       lcdDrawSprite(i, j, 127, '0', OFF);
+ 209               		.loc 1 73 0 is_stmt 0 discriminator 1
+ 210 00dc 00E0      		ldi r16,0
+ 211 00de 00C0      		rjmp .L21
+ 212               	.L8:
+  74:demo.c        ****       onOff ^= 0x01;
+ 213               		.loc 1 74 0 is_stmt 1
+ 214 00e0 01E0      		ldi r16,lo8(1)
+ 215               	.L21:
+ 216 00e2 20E3      		ldi r18,lo8(48)
+ 217 00e4 4FE7      		ldi r20,lo8(127)
+ 218 00e6 6F2D      		mov r22,r15
+ 219 00e8 812F      		mov r24,r17
+ 220 00ea 0E94 0000 		call lcdDrawSprite
+ 221               	.LVL16:
+ 222               		.loc 1 75 0
+ 223 00ee DE24      		eor r13,r14
+ 224               	.LVL17:
+  71:demo.c        ****     {
+ 225               		.loc 1 71 0
+ 226 00f0 185F      		subi r17,lo8(-(8))
+ 227               	.LVL18:
+ 228 00f2 00C0      		rjmp .L12
+ 229               	.L25:
+  76:demo.c        ****     }
+  77:demo.c        ****     onOff ^= 0x01;
+ 230               		.loc 1 77 0
+ 231 00f4 DE24      		eor r13,r14
+ 232               	.LVL19:
+  69:demo.c        ****   {
+ 233               		.loc 1 69 0
+ 234 00f6 98E0      		ldi r25,lo8(8)
+ 235 00f8 F90E      		add r15,r25
+ 236               	.LVL20:
+ 237 00fa 00C0      		rjmp .L6
+ 238               	.LVL21:
+ 239               	.L11:
+ 240               	.LBB18:
+ 241               	.LBB19:
+ 242               		.loc 2 163 0
+ 243 00fc 2FEF      		ldi r18,lo8(1599999)
+ 244 00fe 89E6      		ldi r24,hi8(1599999)
+ 245 0100 98E1      		ldi r25,hlo8(1599999)
+ 246 0102 2150      		1: subi r18,1
+ 247 0104 8040      		sbci r24,0
+ 248 0106 9040      		sbci r25,0
+ 249 0108 01F4      		brne 1b
+ 250 010a 00C0      		rjmp .
+ 251 010c 0000      		nop
+ 252               	.LVL22:
+ 253               	.LBE19:
+ 254               	.LBE18:
+  78:demo.c        ****   }  
+  79:demo.c        ****   
+  80:demo.c        ****   _delay_ms(500);
+  81:demo.c        ****   
+  82:demo.c        ****   // Next, let's draw some awesome concentric circles across the screen.
+  83:demo.c        ****   for (i = 2; i < (xDim/2); i += 8)
+ 255               		.loc 1 83 0
+ 256 010e 12E0      		ldi r17,lo8(2)
+ 257               	.LVL23:
+ 258               	.L13:
+ 259               		.loc 1 83 0 is_stmt 0 discriminator 1
+ 260 0110 8091 0000 		lds r24,xDim
+ 261 0114 8695      		lsr r24
+ 262 0116 1817      		cp r17,r24
+ 263 0118 00F4      		brsh .L26
+  84:demo.c        ****   {
+  85:demo.c        ****     lcdDrawCircle(xDim/2, yDim/2, i, ON);
+ 264               		.loc 1 85 0 is_stmt 1 discriminator 2
+ 265 011a 6091 0000 		lds r22,yDim
+ 266 011e 6695      		lsr r22
+ 267 0120 20E0      		ldi r18,0
+ 268 0122 412F      		mov r20,r17
+ 269 0124 0E94 0000 		call lcdDrawCircle
+ 270               	.LVL24:
+ 271               	.LBB20:
+ 272               	.LBB21:
+ 273               		.loc 2 163 0 discriminator 2
+ 274 0128 2FEF      		ldi r18,lo8(799999)
+ 275 012a 84E3      		ldi r24,hi8(799999)
+ 276 012c 9CE0      		ldi r25,hlo8(799999)
+ 277 012e 2150      		1: subi r18,1
+ 278 0130 8040      		sbci r24,0
+ 279 0132 9040      		sbci r25,0
+ 280 0134 01F4      		brne 1b
+ 281 0136 00C0      		rjmp .
+ 282 0138 0000      		nop
+ 283               	.LBE21:
+ 284               	.LBE20:
+  83:demo.c        ****   {
+ 285               		.loc 1 83 0 discriminator 2
+ 286 013a 185F      		subi r17,lo8(-(8))
+ 287               	.LVL25:
+ 288 013c 00C0      		rjmp .L13
+ 289               	.LVL26:
+ 290               	.L26:
+  83:demo.c        ****   {
+ 291               		.loc 1 83 0 is_stmt 0
+ 292 013e FF24      		clr r15
+ 293 0140 F394      		inc r15
+ 294               	.LVL27:
+ 295 0142 10E0      		ldi r17,0
+ 296               	.LVL28:
+  86:demo.c        ****     _delay_ms(250);
+  87:demo.c        ****   } 
+  88:demo.c        ****     
+  89:demo.c        ****   uint8_t openShut = 0x01;
+  90:demo.c        ****   // Now we're going to send in Pac-man and a ghost to clean up.
+  91:demo.c        ****   for (j = 0; j<(yDim-7); j+=8)
+  92:demo.c        ****   {
+  93:demo.c        ****     for (i = 0; i<(xDim-7); i+=8)
+  94:demo.c        ****     {
+  95:demo.c        ****       if (openShut) lcdDrawSprite(i, j, 4, '0', ON);
+  96:demo.c        ****       else          lcdDrawSprite(i, j, 5, '0', ON);
+  97:demo.c        ****       openShut ^= 0x01;
+ 297               		.loc 1 97 0 is_stmt 1
+ 298 0144 EE24      		clr r14
+ 299 0146 E394      		inc r14
+ 300               	.LVL29:
+ 301               	.L15:
+  91:demo.c        ****   {
+ 302               		.loc 1 91 0 discriminator 1
+ 303 0148 212F      		mov r18,r17
+ 304 014a 30E0      		ldi r19,0
+ 305 014c 8091 0000 		lds r24,yDim
+ 306 0150 90E0      		ldi r25,0
+ 307 0152 0797      		sbiw r24,7
+ 308 0154 2817      		cp r18,r24
+ 309 0156 3907      		cpc r19,r25
+ 310 0158 04F0      		brlt .+2
+ 311 015a 00C0      		rjmp .L1
+  91:demo.c        ****   {
+ 312               		.loc 1 91 0 is_stmt 0
+ 313 015c D12C      		mov r13,__zero_reg__
+ 314 015e 87E0      		ldi r24,lo8(7)
+ 315 0160 C82E      		mov r12,r24
+ 316 0162 C10E      		add r12,r17
+ 317               	.L20:
+ 318               	.LVL30:
+  93:demo.c        ****     {
+ 319               		.loc 1 93 0 is_stmt 1 discriminator 1
+ 320 0164 ED2D      		mov r30,r13
+ 321 0166 F0E0      		ldi r31,0
+ 322 0168 4091 0000 		lds r20,xDim
+ 323 016c 50E0      		ldi r21,0
+ 324 016e 4750      		subi r20,7
+ 325 0170 5109      		sbc r21,__zero_reg__
+ 326 0172 E417      		cp r30,r20
+ 327 0174 F507      		cpc r31,r21
+ 328 0176 04F4      		brge .L27
+  95:demo.c        ****       else          lcdDrawSprite(i, j, 5, '0', ON);
+ 329               		.loc 1 95 0
+ 330 0178 00E0      		ldi r16,0
+ 331 017a 20E3      		ldi r18,lo8(48)
+ 332 017c FF20      		tst r15
+ 333 017e 01F0      		breq .L16
+  95:demo.c        ****       else          lcdDrawSprite(i, j, 5, '0', ON);
+ 334               		.loc 1 95 0 is_stmt 0 discriminator 1
+ 335 0180 44E0      		ldi r20,lo8(4)
+ 336 0182 00C0      		rjmp .L22
+ 337               	.L16:
+  96:demo.c        ****       openShut ^= 0x01;
+ 338               		.loc 1 96 0 is_stmt 1
+ 339 0184 45E0      		ldi r20,lo8(5)
+ 340               	.L22:
+ 341 0186 612F      		mov r22,r17
+ 342 0188 8D2D      		mov r24,r13
+ 343 018a 0E94 0000 		call lcdDrawSprite
+ 344               	.LVL31:
+ 345               		.loc 1 97 0
+ 346 018e FE24      		eor r15,r14
+ 347               	.LVL32:
+ 348 0190 9AE0      		ldi r25,lo8(10)
+ 349 0192 B92E      		mov r11,r25
+ 350 0194 BD0C      		add r11,r13
+  98:demo.c        ****       lcdDrawSprite(i+10, j, 0, '0', ON);
+ 351               		.loc 1 98 0
+ 352 0196 00E0      		ldi r16,0
+ 353 0198 20E3      		ldi r18,lo8(48)
+ 354 019a 40E0      		ldi r20,0
+ 355 019c 612F      		mov r22,r17
+ 356 019e 8B2D      		mov r24,r11
+ 357 01a0 0E94 0000 		call lcdDrawSprite
+ 358               	.LVL33:
+ 359               	.LBB22:
+ 360               	.LBB23:
+ 361               		.loc 2 163 0
+ 362 01a4 2FEF      		ldi r18,lo8(639999)
+ 363 01a6 83EC      		ldi r24,hi8(639999)
+ 364 01a8 99E0      		ldi r25,hlo8(639999)
+ 365 01aa 2150      		1: subi r18,1
+ 366 01ac 8040      		sbci r24,0
+ 367 01ae 9040      		sbci r25,0
+ 368 01b0 01F4      		brne 1b
+ 369 01b2 00C0      		rjmp .
+ 370 01b4 0000      		nop
+ 371 01b6 47E0      		ldi r20,lo8(7)
+ 372 01b8 4D0D      		add r20,r13
+ 373               	.LBE23:
+ 374               	.LBE22:
+  99:demo.c        ****       _delay_ms(200);
+ 100:demo.c        ****       lcdEraseBlock(i, j, i+7, j+7);
+ 375               		.loc 1 100 0
+ 376 01ba 2C2D      		mov r18,r12
+ 377 01bc 612F      		mov r22,r17
+ 378 01be 8D2D      		mov r24,r13
+ 379 01c0 0E94 0000 		call lcdEraseBlock
+ 380               	.LVL34:
+ 381 01c4 41E1      		ldi r20,lo8(17)
+ 382 01c6 4D0D      		add r20,r13
+ 101:demo.c        ****       lcdEraseBlock(i+10, j, i+17, j+7);
+ 383               		.loc 1 101 0
+ 384 01c8 2C2D      		mov r18,r12
+ 385 01ca 612F      		mov r22,r17
+ 386 01cc 8B2D      		mov r24,r11
+ 387 01ce 0E94 0000 		call lcdEraseBlock
+ 388               	.LVL35:
+  93:demo.c        ****     {
+ 389               		.loc 1 93 0
+ 390 01d2 28E0      		ldi r18,lo8(8)
+ 391 01d4 D20E      		add r13,r18
+ 392               	.LVL36:
+ 393 01d6 00C0      		rjmp .L20
+ 394               	.LVL37:
+ 395               	.L27:
+  91:demo.c        ****   {
+ 396               		.loc 1 91 0
+ 397 01d8 185F      		subi r17,lo8(-(8))
+ 398               	.LVL38:
+ 399 01da 00C0      		rjmp .L15
+ 400               	.LVL39:
+ 401               	.L1:
+ 402               	/* epilogue start */
+ 102:demo.c        ****     }
+ 103:demo.c        ****   } 
+ 104:demo.c        **** }
+ 403               		.loc 1 104 0
+ 404 01dc C05C      		subi r28,-64
+ 405 01de DF4F      		sbci r29,-1
+ 406 01e0 0FB6      		in __tmp_reg__,__SREG__
+ 407 01e2 F894      		cli
+ 408 01e4 DEBF      		out __SP_H__,r29
+ 409 01e6 0FBE      		out __SREG__,__tmp_reg__
+ 410 01e8 CDBF      		out __SP_L__,r28
+ 411 01ea DF91      		pop r29
+ 412 01ec CF91      		pop r28
+ 413 01ee 1F91      		pop r17
+ 414               	.LVL40:
+ 415 01f0 0F91      		pop r16
+ 416 01f2 FF90      		pop r15
+ 417               	.LVL41:
+ 418 01f4 EF90      		pop r14
+ 419 01f6 DF90      		pop r13
+ 420 01f8 CF90      		pop r12
+ 421 01fa BF90      		pop r11
+ 422 01fc 0895      		ret
+ 423               		.cfi_endproc
+ 424               	.LFE7:
+ 426               		.section	.progmem.data,"a",@progbits
+ 429               	wantYouGone:
+ 430 0000 0000      		.word	string_1
+ 431 0002 0000      		.word	string_2
+ 432 0004 0000      		.word	string_3
+ 433 0006 0000      		.word	string_4
+ 434 0008 0000      		.word	string_5
+ 435 000a 0000      		.word	string_6
+ 438               	string_6:
+ 439 000c 556E 6465 		.string	"Under the circumstances, I've been SHOCKINGLY nice."
+ 439      7220 7468 
+ 439      6520 6369 
+ 439      7263 756D 
+ 439      7374 616E 
+ 440 0040 00        		.string	""
+ 443               	string_5:
+ 444 0041 4578 6365 		.string	"Except I wasn't laughing."
+ 444      7074 2049 
+ 444      2077 6173 
+ 444      6E27 7420 
+ 444      6C61 7567 
+ 445 005b 00        		.string	""
+ 448               	string_4:
+ 449 005c 4F68 2068 		.string	"Oh how we laughed and laughed!"
+ 449      6F77 2077 
+ 449      6520 6C61 
+ 449      7567 6865 
+ 449      6420 616E 
+ 450 007b 00        		.string	""
+ 453               	string_3:
+ 454 007c 5265 6D65 		.string	"Remember how you tried to kill me twice?"
+ 454      6D62 6572 
+ 454      2068 6F77 
+ 454      2079 6F75 
+ 454      2074 7269 
+ 455 00a5 00        		.string	""
+ 458               	string_2:
+ 459 00a6 4974 2773 		.string	"It's always such a pleasure."
+ 459      2061 6C77 
+ 459      6179 7320 
+ 459      7375 6368 
+ 459      2061 2070 
+ 460 00c3 00        		.string	""
+ 463               	string_1:
+ 464 00c4 5765 6C6C 		.string	"Well here we are again."
+ 464      2068 6572 
+ 464      6520 7765 
+ 464      2061 7265 
+ 464      2061 6761 
+ 465 00dc 00        		.string	""
+ 466               		.text
+ 467               	.Letext0:
+ 468               		.file 3 "/usr/lib/avr/include/stdint.h"
+ 469               		.file 4 "glcdbp.h"
+ 470               		.file 5 "lcd.h"
+ 471               		.file 6 "demo.h"
+ 472               		.file 7 "/usr/lib/avr/include/avr/pgmspace.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 demo.c
+     /tmp/ccsizPIa.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccsizPIa.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccsizPIa.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccsizPIa.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccsizPIa.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccsizPIa.s:12     .text:0000000000000000 demo
+     /tmp/ccsizPIa.s:429    .progmem.data:0000000000000000 wantYouGone
+     /tmp/ccsizPIa.s:463    .progmem.data:00000000000000c4 string_1
+     /tmp/ccsizPIa.s:458    .progmem.data:00000000000000a6 string_2
+     /tmp/ccsizPIa.s:453    .progmem.data:000000000000007c string_3
+     /tmp/ccsizPIa.s:448    .progmem.data:000000000000005c string_4
+     /tmp/ccsizPIa.s:443    .progmem.data:0000000000000041 string_5
+     /tmp/ccsizPIa.s:438    .progmem.data:000000000000000c string_6
+
+UNDEFINED SYMBOLS
+strcpy_P
+lcdDrawChar
+lcdClearScreen
+cursorPos
+yDim
+xDim
+lcdDrawSprite
+lcdDrawCircle
+lcdEraseBlock

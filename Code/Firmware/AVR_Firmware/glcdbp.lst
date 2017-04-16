@@ -1,0 +1,776 @@
+   1               		.file	"glcdbp.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	timerInit
+  12               	timerInit:
+  13               	.LFB8:
+  14               		.file 1 "glcdbp.c"
+   1:glcdbp.c      **** /***************************************************************************
+   2:glcdbp.c      **** glcdbp.c
+   3:glcdbp.c      **** 
+   4:glcdbp.c      **** Main application file for the serial graphical LCD backpack project. This is
+   5:glcdbp.c      ****  the main application loop, as well as the calling function for all init
+   6:glcdbp.c      ****  code found elsewhere. The PWM timer init code is here, too, because I wasn't
+   7:glcdbp.c      ****  sure where else to put.
+   8:glcdbp.c      **** 
+   9:glcdbp.c      **** 02 May 2013 - Mike Hord, SparkFun Electronics
+  10:glcdbp.c      **** 
+  11:glcdbp.c      **** This code is released under the Creative Commons Attribution Share-Alike 3.0
+  12:glcdbp.c      ****  license. You are free to reuse, remix, or redistribute it as you see fit,
+  13:glcdbp.c      ****  so long as you provide attribution to SparkFun Electronics.
+  14:glcdbp.c      **** 
+  15:glcdbp.c      **** ***************************************************************************/
+  16:glcdbp.c      **** //#define F_CPU 16000000UL
+  17:glcdbp.c      **** 
+  18:glcdbp.c      **** #include <avr/interrupt.h>
+  19:glcdbp.c      **** #include <util/delay.h>
+  20:glcdbp.c      **** #include "glcdbp.h"
+  21:glcdbp.c      **** #include "io_support.h"
+  22:glcdbp.c      **** #include "serial.h"
+  23:glcdbp.c      **** #include "lcd.h"
+  24:glcdbp.c      **** #include "ui.h"
+  25:glcdbp.c      **** #include "nvm.h"
+  26:glcdbp.c      **** 
+  27:glcdbp.c      **** // These variables will be used over and over, in various files, to access
+  28:glcdbp.c      **** //  global variables that may be needed to make decisions elsewhere.
+  29:glcdbp.c      **** enum DISPLAY_TYPE   display = SMALL;
+  30:glcdbp.c      **** volatile uint8_t    rxRingBuffer[BUF_DEPTH];
+  31:glcdbp.c      **** volatile uint8_t    bufferSize = 0;
+  32:glcdbp.c      **** volatile uint16_t   rxRingHead = 0;
+  33:glcdbp.c      **** volatile uint16_t   rxRingTail = 0;
+  34:glcdbp.c      **** volatile uint8_t    reverse = 0;
+  35:glcdbp.c      **** 
+  36:glcdbp.c      **** int main(void)
+  37:glcdbp.c      **** {
+  38:glcdbp.c      ****   // The first thing we want to check is if we have a large or small
+  39:glcdbp.c      ****   //  display on our hands. We can tell because PB3 will be pulled high if
+  40:glcdbp.c      ****   //  the display is large (hopefully; that's done at build time).
+  41:glcdbp.c      ****   PORTB |= 0x08;   // Enable the pull-up on PB3.
+  42:glcdbp.c      ****   _delay_us(5);    // Wait a few us for the pin to change- this is important!
+  43:glcdbp.c      ****  // uint8_t portTemp = PINB;  // Cache the pins status...
+  44:glcdbp.c      ****  // if ((portTemp & 0x08) == 0x08)  // ...and check to see if what the pin says.
+  45:glcdbp.c      ****   //{
+  46:glcdbp.c      ****     display = LARGE;  // If the pin is high, call it a large display.
+  47:glcdbp.c      ****   //}
+  48:glcdbp.c      ****   //else 
+  49:glcdbp.c      ****   //{
+  50:glcdbp.c      ****     //display = SMALL;  // If the pin is low, it's a small display.
+  51:glcdbp.c      ****   //}
+  52:glcdbp.c      ****   PORTB &= ~0x08; // Disable the pull-up on PB3.
+  53:glcdbp.c      ****   
+  54:glcdbp.c      ****   // ioInit() configures the IO pins as we'll need them for the rest of the
+  55:glcdbp.c      ****   //  code; once we've identified our display size, we'll do the pins
+  56:glcdbp.c      ****   //  accordingly.
+  57:glcdbp.c      ****   ioInit();
+  58:glcdbp.c      ****   
+  59:glcdbp.c      ****   // We use a timer (timer1) for our PWM of the backlight. This function sets
+  60:glcdbp.c      ****   //  that up as needed.
+  61:glcdbp.c      ****   timerInit();
+  62:glcdbp.c      ****   
+  63:glcdbp.c      ****   // By default, we want to start up at 115200BPS. In a second, we'll check
+  64:glcdbp.c      ****   //  for any input from the user to see if we should remain at 115200 or
+  65:glcdbp.c      ****   //  check the EEPROM for a different speed.
+  66:glcdbp.c      ****   serialInit(BR115200);
+  67:glcdbp.c      ****   
+  68:glcdbp.c      ****   // Enable interrupts. The only thing we use interrupts for is serial data.
+  69:glcdbp.c      ****   sei();
+  70:glcdbp.c      ****   
+  71:glcdbp.c      ****   // Check to see if we want to be in white-on-black mode (1) or black-on-white
+  72:glcdbp.c      ****   //   mode (reverse = 0).
+  73:glcdbp.c      ****   reverse = 0x01 & getReverse();
+  74:glcdbp.c      ****   
+  75:glcdbp.c      ****   // Configure the LCD as it should be configured; we leave this until late
+  76:glcdbp.c      ****   //  in the process more as a relic of development than anything else, b/c
+  77:glcdbp.c      ****   //  it was useful to have the other stuff setup first.
+  78:glcdbp.c      ****   lcdConfig();
+  79:glcdbp.c      ****   
+  80:glcdbp.c      ****   // Clear the screen for good measure. This *may* not be necessary, but for
+  81:glcdbp.c      ****   //  the large display, it definitely is, as the power-on status of that one
+  82:glcdbp.c      ****   //  is pure garbage, everywhere.
+  83:glcdbp.c      ****   lcdClearScreen();
+  84:glcdbp.c      ****   
+  85:glcdbp.c      ****   // Draw the splash, if the EEPROM value says we should.
+  86:glcdbp.c      ****   if ((getSplash() & 0x01)==1) lcdDrawLogo();
+  87:glcdbp.c      ****   
+  88:glcdbp.c      ****   // Now wait for one second, for the user to override the stored baud rate
+  89:glcdbp.c      ****   //  and get back to 115200, if they so desire.
+  90:glcdbp.c      ****   _delay_ms(1000);
+  91:glcdbp.c      ****   
+  92:glcdbp.c      ****   // If the user has send *any* character during the splash time, we should
+  93:glcdbp.c      ****   //  skip this switch and set our baud rate back to 115200.
+  94:glcdbp.c      ****   if (bufferSize == 0)
+  95:glcdbp.c      ****   {
+  96:glcdbp.c      ****     switch(getBaudRate())
+  97:glcdbp.c      ****     {
+  98:glcdbp.c      ****       case '1':
+  99:glcdbp.c      ****       serialInit(BR4800);
+ 100:glcdbp.c      ****       break;
+ 101:glcdbp.c      ****       case '2':
+ 102:glcdbp.c      ****       serialInit(BR9600);
+ 103:glcdbp.c      ****       break;
+ 104:glcdbp.c      ****       case '3':
+ 105:glcdbp.c      ****       serialInit(BR19200);
+ 106:glcdbp.c      ****       break;
+ 107:glcdbp.c      ****       case '4':
+ 108:glcdbp.c      ****       serialInit(BR38400);
+ 109:glcdbp.c      ****       break;
+ 110:glcdbp.c      ****       case '5':
+ 111:glcdbp.c      ****       serialInit(BR57600);
+ 112:glcdbp.c      ****       break;
+ 113:glcdbp.c      ****       case '6':
+ 114:glcdbp.c      ****       serialInit(BR115200);
+ 115:glcdbp.c      ****       break;
+ 116:glcdbp.c      ****       default:
+ 117:glcdbp.c      ****       break;
+ 118:glcdbp.c      ****     }
+ 119:glcdbp.c      ****   }
+ 120:glcdbp.c      ****   else setBaudRate('6');
+ 121:glcdbp.c      ****   
+ 122:glcdbp.c      ****   // Clear off the splash.
+ 123:glcdbp.c      ****   lcdClearScreen();
+ 124:glcdbp.c      ****   
+ 125:glcdbp.c      ****   // Clear the serial buffer. Any data sent during that initial 1s period is
+ 126:glcdbp.c      ****   //  lost; we don't care because we know that data *should* only be for an
+ 127:glcdbp.c      ****   //  emergency baud rate reset.
+ 128:glcdbp.c      ****   clearBuffer();
+ 129:glcdbp.c      ****   
+ 130:glcdbp.c      ****   // This is a troubleshooting message, to let us know that setup has
+ 131:glcdbp.c      ****   //  completed and the display is ready to rock. It is commented in the
+ 132:glcdbp.c      ****   //  production version of the code but left in place.
+ 133:glcdbp.c      ****   // putLine("Ready to serve!");
+ 134:glcdbp.c      ****   
+ 135:glcdbp.c      ****   // Under normal circumstances, we'll spend *all* our time cycling through
+ 136:glcdbp.c      ****   //  this loop, parsing input from the serial port. The serial data is
+ 137:glcdbp.c      ****   //  buffered by an interrupt, and we'll pop that buffer here (and in ui.c)
+ 138:glcdbp.c      ****   //  and make decisions on what to do with it.
+ 139:glcdbp.c      ****   while(1)
+ 140:glcdbp.c      ****   {
+ 141:glcdbp.c      ****     // If there's *anything* in the buffer, we need to deal with it.
+ 142:glcdbp.c      ****     while (bufferSize > 0)
+ 143:glcdbp.c      ****     {
+ 144:glcdbp.c      ****       // serialBufferPop() pulls data from the top of the FIFO that comprises
+ 145:glcdbp.c      ****       //  our serial port buffer, automatically changing the pointers and
+ 146:glcdbp.c      ****       //  stack size.
+ 147:glcdbp.c      ****       char bufferChar = serialBufferPop();
+ 148:glcdbp.c      ****       // If the character received is the command escape character ('|')...
+ 149:glcdbp.c      ****       if (bufferChar == '|')
+ 150:glcdbp.c      ****       {
+ 151:glcdbp.c      ****         while (bufferSize == 0);    // ...wait for the next character...
+ 152:glcdbp.c      ****         bufferChar = serialBufferPop(); // ...fetch the character..
+ 153:glcdbp.c      ****         uiStateMachine(bufferChar); // ... then see what to do.
+ 154:glcdbp.c      ****         // Note that we won't return from the state machine until the command
+ 155:glcdbp.c      ****         //  specified by the character that sends us there has been completed-
+ 156:glcdbp.c      ****         //  there's no bailing out of that process. Yet.
+ 157:glcdbp.c      ****       }
+ 158:glcdbp.c      ****       // Otherwise, draw the character. lcdDrawChar also handles backspace,
+ 159:glcdbp.c      ****       //   carriage return and new line.
+ 160:glcdbp.c      ****       else if (((bufferChar >= ' ') && (bufferChar <= '~')) ||
+ 161:glcdbp.c      ****                (bufferChar == '\r') ||  // Newline.
+ 162:glcdbp.c      ****                (bufferChar == '\b') )   // Backspace.
+ 163:glcdbp.c      ****         lcdDrawChar(bufferChar);
+ 164:glcdbp.c      ****     }
+ 165:glcdbp.c      ****   }
+ 166:glcdbp.c      **** }
+ 167:glcdbp.c      **** 
+ 168:glcdbp.c      **** void timerInit(void)
+ 169:glcdbp.c      **** {  
+  15               		.loc 1 169 0
+  16               		.cfi_startproc
+  17               	/* prologue: function */
+  18               	/* frame size = 0 */
+  19               	/* stack size = 0 */
+  20               	.L__stack_usage = 0
+ 170:glcdbp.c      ****   // Timer1 initialization
+ 171:glcdbp.c      ****   //  We use timer 1 fast PWM mode to dim the backlight on the display.
+ 172:glcdbp.c      ****   //  OC1B (PB2) is connected to a BJT for controlling the backlight; the BJT
+ 173:glcdbp.c      ****   //  is PNP so we want to use inverting mode.
+ 174:glcdbp.c      ****   // PWM frequency is fclk/(N*(1+TOP)), where TOP is, in this case 100,
+ 175:glcdbp.c      ****   //  N = 1, and fclk is 16MHz. Thus, Fpwm ~ 160kHz.
+ 176:glcdbp.c      ****   
+ 177:glcdbp.c      ****   // TCCR1A-  7:6 - Channel A compare output mode
+ 178:glcdbp.c      ****   //                 Set to 00 for normal pin operation
+ 179:glcdbp.c      ****   //          5:4 - Channel B compare output mode
+ 180:glcdbp.c      ****   //                 Set to 01 for inverting PWM output mode
+ 181:glcdbp.c      ****   //          3:2 - Don't care/no use
+ 182:glcdbp.c      ****   //          1:0 - Waveform generation mode bits 1:0
+ 183:glcdbp.c      ****   //                 Along with WGM1 3:2 (In TCCR1B), set to 1111 to enable
+ 184:glcdbp.c      ****   //                 fast PWM mode. TCNT1 will increment until it reaches ICR1,
+ 185:glcdbp.c      ****   //                 then reset, and the pin will change when TCNT1 == 0 and
+ 186:glcdbp.c      ****   //                 when TCNT1 == OCR1B.
+ 187:glcdbp.c      ****   TCCR1A = 0b00110010;
+  21               		.loc 1 187 0
+  22 0000 82E3      		ldi r24,lo8(50)
+  23 0002 8093 8000 		sts 128,r24
+ 188:glcdbp.c      ****   
+ 189:glcdbp.c      ****   // TCCR1B-  7   - Input noise canceler (Don't care)
+ 190:glcdbp.c      ****   //          6   - Input capture edge select (Don't care)
+ 191:glcdbp.c      ****   //          5   - Don't care/no use
+ 192:glcdbp.c      ****   //          4:3 - Waveform generation mode bits 3:2
+ 193:glcdbp.c      ****   //                 See above; set to 11 for fast PWM
+ 194:glcdbp.c      ****   //          2:0 - Timer 1 clock source
+ 195:glcdbp.c      ****   //                 Set to 001 for no clock divisor.
+ 196:glcdbp.c      ****   TCCR1B = 0b00011001;
+  24               		.loc 1 196 0
+  25 0006 89E1      		ldi r24,lo8(25)
+  26 0008 8093 8100 		sts 129,r24
+ 197:glcdbp.c      ****   
+ 198:glcdbp.c      ****   // ICR1-  Really implemented as two 8-bit registers (ICR1L and ICR1H),
+ 199:glcdbp.c      ****   //  the value in this register (in this mode) marks the point at which
+ 200:glcdbp.c      ****   //  the timer quits counting and returns to zero. By making it 100, we
+ 201:glcdbp.c      ****   //  can then really easily set our backlight intensity from 0-100.
+ 202:glcdbp.c      ****   ICR1 = 100;
+  27               		.loc 1 202 0
+  28 000c 84E6      		ldi r24,lo8(100)
+  29 000e 90E0      		ldi r25,0
+  30 0010 9093 8700 		sts 134+1,r25
+  31 0014 8093 8600 		sts 134,r24
+ 203:glcdbp.c      ****   
+ 204:glcdbp.c      ****   // OCR1B- Really implemented as two 8-bit registers (OCR1BL and OCR1BH),
+ 205:glcdbp.c      ****   //  the value in this register is the point where the output pin will
+ 206:glcdbp.c      ****   //  transition from low to high, turning the backlight off. We have a
+ 207:glcdbp.c      ****   //  value stored in EEPROM, so we need to retrieve it.
+ 208:glcdbp.c      ****   OCR1B = getBacklightLevel();
+  32               		.loc 1 208 0
+  33 0018 0E94 0000 		call getBacklightLevel
+  34               	.LVL0:
+  35 001c 90E0      		ldi r25,0
+  36 001e 9093 8B00 		sts 138+1,r25
+  37 0022 8093 8A00 		sts 138,r24
+  38 0026 0895      		ret
+  39               		.cfi_endproc
+  40               	.LFE8:
+  42               		.section	.text.startup,"ax",@progbits
+  43               	.global	main
+  45               	main:
+  46               	.LFB7:
+  37:glcdbp.c      ****   // The first thing we want to check is if we have a large or small
+  47               		.loc 1 37 0
+  48               		.cfi_startproc
+  49               	/* prologue: function */
+  50               	/* frame size = 0 */
+  51               	/* stack size = 0 */
+  52               	.L__stack_usage = 0
+  41:glcdbp.c      ****   _delay_us(5);    // Wait a few us for the pin to change- this is important!
+  53               		.loc 1 41 0
+  54 0000 2B9A      		sbi 0x5,3
+  55               	.LVL1:
+  56               	.LBB7:
+  57               	.LBB8:
+  58               		.file 2 "/usr/lib/avr/include/util/delay.h"
+   1:/usr/lib/avr/include/util/delay.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   2:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2004,2005,2007 Joerg Wunsch
+   3:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2007  Florin-Viorel Petrov
+   4:/usr/lib/avr/include/util/delay.h ****    All rights reserved.
+   5:/usr/lib/avr/include/util/delay.h **** 
+   6:/usr/lib/avr/include/util/delay.h ****    Redistribution and use in source and binary forms, with or without
+   7:/usr/lib/avr/include/util/delay.h ****    modification, are permitted provided that the following conditions are met:
+   8:/usr/lib/avr/include/util/delay.h **** 
+   9:/usr/lib/avr/include/util/delay.h ****    * Redistributions of source code must retain the above copyright
+  10:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer.
+  11:/usr/lib/avr/include/util/delay.h **** 
+  12:/usr/lib/avr/include/util/delay.h ****    * Redistributions in binary form must reproduce the above copyright
+  13:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer in
+  14:/usr/lib/avr/include/util/delay.h ****      the documentation and/or other materials provided with the
+  15:/usr/lib/avr/include/util/delay.h ****      distribution.
+  16:/usr/lib/avr/include/util/delay.h **** 
+  17:/usr/lib/avr/include/util/delay.h ****    * Neither the name of the copyright holders nor the names of
+  18:/usr/lib/avr/include/util/delay.h ****      contributors may be used to endorse or promote products derived
+  19:/usr/lib/avr/include/util/delay.h ****      from this software without specific prior written permission.
+  20:/usr/lib/avr/include/util/delay.h **** 
+  21:/usr/lib/avr/include/util/delay.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  22:/usr/lib/avr/include/util/delay.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  23:/usr/lib/avr/include/util/delay.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  24:/usr/lib/avr/include/util/delay.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  25:/usr/lib/avr/include/util/delay.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  26:/usr/lib/avr/include/util/delay.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  27:/usr/lib/avr/include/util/delay.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  28:/usr/lib/avr/include/util/delay.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  29:/usr/lib/avr/include/util/delay.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  30:/usr/lib/avr/include/util/delay.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  31:/usr/lib/avr/include/util/delay.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  32:/usr/lib/avr/include/util/delay.h **** 
+  33:/usr/lib/avr/include/util/delay.h **** /* $Id$ */
+  34:/usr/lib/avr/include/util/delay.h **** 
+  35:/usr/lib/avr/include/util/delay.h **** #ifndef _UTIL_DELAY_H_
+  36:/usr/lib/avr/include/util/delay.h **** #define _UTIL_DELAY_H_ 1
+  37:/usr/lib/avr/include/util/delay.h **** 
+  38:/usr/lib/avr/include/util/delay.h **** #ifndef __HAS_DELAY_CYCLES
+  39:/usr/lib/avr/include/util/delay.h **** #define __HAS_DELAY_CYCLES 1
+  40:/usr/lib/avr/include/util/delay.h **** #endif
+  41:/usr/lib/avr/include/util/delay.h **** 
+  42:/usr/lib/avr/include/util/delay.h **** #include <inttypes.h>
+  43:/usr/lib/avr/include/util/delay.h **** #include <util/delay_basic.h>
+  44:/usr/lib/avr/include/util/delay.h **** #include <math.h>
+  45:/usr/lib/avr/include/util/delay.h **** 
+  46:/usr/lib/avr/include/util/delay.h **** /** \file */
+  47:/usr/lib/avr/include/util/delay.h **** /** \defgroup util_delay <util/delay.h>: Convenience functions for busy-wait delay loops
+  48:/usr/lib/avr/include/util/delay.h ****     \code
+  49:/usr/lib/avr/include/util/delay.h ****     #define F_CPU 1000000UL  // 1 MHz
+  50:/usr/lib/avr/include/util/delay.h ****     //#define F_CPU 14.7456E6
+  51:/usr/lib/avr/include/util/delay.h ****     #include <util/delay.h>
+  52:/usr/lib/avr/include/util/delay.h ****     \endcode
+  53:/usr/lib/avr/include/util/delay.h **** 
+  54:/usr/lib/avr/include/util/delay.h ****     \note As an alternative method, it is possible to pass the
+  55:/usr/lib/avr/include/util/delay.h ****     F_CPU macro down to the compiler from the Makefile.
+  56:/usr/lib/avr/include/util/delay.h ****     Obviously, in that case, no \c \#define statement should be
+  57:/usr/lib/avr/include/util/delay.h ****     used.
+  58:/usr/lib/avr/include/util/delay.h **** 
+  59:/usr/lib/avr/include/util/delay.h ****     The functions in this header file are wrappers around the basic
+  60:/usr/lib/avr/include/util/delay.h ****     busy-wait functions from <util/delay_basic.h>.  They are meant as
+  61:/usr/lib/avr/include/util/delay.h ****     convenience functions where actual time values can be specified
+  62:/usr/lib/avr/include/util/delay.h ****     rather than a number of cycles to wait for.  The idea behind is
+  63:/usr/lib/avr/include/util/delay.h ****     that compile-time constant expressions will be eliminated by
+  64:/usr/lib/avr/include/util/delay.h ****     compiler optimization so floating-point expressions can be used
+  65:/usr/lib/avr/include/util/delay.h ****     to calculate the number of delay cycles needed based on the CPU
+  66:/usr/lib/avr/include/util/delay.h ****     frequency passed by the macro F_CPU.
+  67:/usr/lib/avr/include/util/delay.h **** 
+  68:/usr/lib/avr/include/util/delay.h ****     \note In order for these functions to work as intended, compiler
+  69:/usr/lib/avr/include/util/delay.h ****     optimizations <em>must</em> be enabled, and the delay time
+  70:/usr/lib/avr/include/util/delay.h ****     <em>must</em> be an expression that is a known constant at
+  71:/usr/lib/avr/include/util/delay.h ****     compile-time.  If these requirements are not met, the resulting
+  72:/usr/lib/avr/include/util/delay.h ****     delay will be much longer (and basically unpredictable), and
+  73:/usr/lib/avr/include/util/delay.h ****     applications that otherwise do not use floating-point calculations
+  74:/usr/lib/avr/include/util/delay.h ****     will experience severe code bloat by the floating-point library
+  75:/usr/lib/avr/include/util/delay.h ****     routines linked into the application.
+  76:/usr/lib/avr/include/util/delay.h **** 
+  77:/usr/lib/avr/include/util/delay.h ****     The functions available allow the specification of microsecond, and
+  78:/usr/lib/avr/include/util/delay.h ****     millisecond delays directly, using the application-supplied macro
+  79:/usr/lib/avr/include/util/delay.h ****     F_CPU as the CPU clock frequency (in Hertz).
+  80:/usr/lib/avr/include/util/delay.h **** 
+  81:/usr/lib/avr/include/util/delay.h **** */
+  82:/usr/lib/avr/include/util/delay.h **** 
+  83:/usr/lib/avr/include/util/delay.h **** #if !defined(__DOXYGEN__)
+  84:/usr/lib/avr/include/util/delay.h **** static inline void _delay_us(double __us) __attribute__((always_inline));
+  85:/usr/lib/avr/include/util/delay.h **** static inline void _delay_ms(double __ms) __attribute__((always_inline));
+  86:/usr/lib/avr/include/util/delay.h **** #endif
+  87:/usr/lib/avr/include/util/delay.h **** 
+  88:/usr/lib/avr/include/util/delay.h **** #ifndef F_CPU
+  89:/usr/lib/avr/include/util/delay.h **** /* prevent compiler error by supplying a default */
+  90:/usr/lib/avr/include/util/delay.h **** # warning "F_CPU not defined for <util/delay.h>"
+  91:/usr/lib/avr/include/util/delay.h **** # define F_CPU 1000000UL
+  92:/usr/lib/avr/include/util/delay.h **** #endif
+  93:/usr/lib/avr/include/util/delay.h **** 
+  94:/usr/lib/avr/include/util/delay.h **** #ifndef __OPTIMIZE__
+  95:/usr/lib/avr/include/util/delay.h **** # warning "Compiler optimizations disabled; functions from <util/delay.h> won't work as designed"
+  96:/usr/lib/avr/include/util/delay.h **** #endif
+  97:/usr/lib/avr/include/util/delay.h **** 
+  98:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+  99:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 100:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 101:/usr/lib/avr/include/util/delay.h **** #  include <math.h>
+ 102:/usr/lib/avr/include/util/delay.h **** #endif
+ 103:/usr/lib/avr/include/util/delay.h **** 
+ 104:/usr/lib/avr/include/util/delay.h **** /**
+ 105:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 106:/usr/lib/avr/include/util/delay.h **** 
+ 107:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __ms milliseconds, using _delay_loop_2().
+ 108:/usr/lib/avr/include/util/delay.h **** 
+ 109:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 110:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 111:/usr/lib/avr/include/util/delay.h **** 
+ 112:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 262.14 ms / F_CPU in MHz.
+ 113:/usr/lib/avr/include/util/delay.h **** 
+ 114:/usr/lib/avr/include/util/delay.h ****    When the user request delay which exceed the maximum possible one,
+ 115:/usr/lib/avr/include/util/delay.h ****    _delay_ms() provides a decreased resolution functionality. In this
+ 116:/usr/lib/avr/include/util/delay.h ****    mode _delay_ms() will work with a resolution of 1/10 ms, providing
+ 117:/usr/lib/avr/include/util/delay.h ****    delays up to 6.5535 seconds (independent from CPU frequency).  The
+ 118:/usr/lib/avr/include/util/delay.h ****    user will not be informed about decreased resolution.
+ 119:/usr/lib/avr/include/util/delay.h **** 
+ 120:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 121:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 ms/ F_CPU in MHz. For
+ 122:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflows results in
+ 123:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0ms.
+ 124:/usr/lib/avr/include/util/delay.h **** 
+ 125:/usr/lib/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 126:/usr/lib/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 127:/usr/lib/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 128:/usr/lib/avr/include/util/delay.h **** 
+ 129:/usr/lib/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 130:/usr/lib/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 131:/usr/lib/avr/include/util/delay.h **** 
+ 132:/usr/lib/avr/include/util/delay.h ****    Note: The new implementation of _delay_ms(double __ms) with 
+ 133:/usr/lib/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible. 
+ 134:/usr/lib/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 135:/usr/lib/avr/include/util/delay.h ****    Also, the backward compatible
+ 136:/usr/lib/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 137:/usr/lib/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 138:/usr/lib/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 139:/usr/lib/avr/include/util/delay.h **** 
+ 140:/usr/lib/avr/include/util/delay.h ****  */
+ 141:/usr/lib/avr/include/util/delay.h **** void
+ 142:/usr/lib/avr/include/util/delay.h **** _delay_ms(double __ms)
+ 143:/usr/lib/avr/include/util/delay.h **** {
+ 144:/usr/lib/avr/include/util/delay.h **** 	double __tmp ; 
+ 145:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 146:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 147:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 148:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 149:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 150:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e3) * __ms;
+ 151:/usr/lib/avr/include/util/delay.h **** 
+ 152:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 153:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 154:/usr/lib/avr/include/util/delay.h **** 
+ 155:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 156:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 157:/usr/lib/avr/include/util/delay.h **** 
+ 158:/usr/lib/avr/include/util/delay.h **** 	#else
+ 159:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 160:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 161:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 162:/usr/lib/avr/include/util/delay.h **** 
+ 163:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+ 164:/usr/lib/avr/include/util/delay.h **** 
+ 165:/usr/lib/avr/include/util/delay.h **** #else
+ 166:/usr/lib/avr/include/util/delay.h **** 	uint16_t __ticks;
+ 167:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 4e3) * __ms;
+ 168:/usr/lib/avr/include/util/delay.h **** 	if (__tmp < 1.0)
+ 169:/usr/lib/avr/include/util/delay.h **** 		__ticks = 1;
+ 170:/usr/lib/avr/include/util/delay.h **** 	else if (__tmp > 65535)
+ 171:/usr/lib/avr/include/util/delay.h **** 	{
+ 172:/usr/lib/avr/include/util/delay.h **** 		//	__ticks = requested delay in 1/10 ms
+ 173:/usr/lib/avr/include/util/delay.h **** 		__ticks = (uint16_t) (__ms * 10.0);
+ 174:/usr/lib/avr/include/util/delay.h **** 		while(__ticks)
+ 175:/usr/lib/avr/include/util/delay.h **** 		{
+ 176:/usr/lib/avr/include/util/delay.h **** 			// wait 1/10 ms
+ 177:/usr/lib/avr/include/util/delay.h **** 			_delay_loop_2(((F_CPU) / 4e3) / 10);
+ 178:/usr/lib/avr/include/util/delay.h **** 			__ticks --;
+ 179:/usr/lib/avr/include/util/delay.h **** 		}
+ 180:/usr/lib/avr/include/util/delay.h **** 		return;
+ 181:/usr/lib/avr/include/util/delay.h **** 	}
+ 182:/usr/lib/avr/include/util/delay.h **** 	else
+ 183:/usr/lib/avr/include/util/delay.h **** 		__ticks = (uint16_t)__tmp;
+ 184:/usr/lib/avr/include/util/delay.h **** 	_delay_loop_2(__ticks);
+ 185:/usr/lib/avr/include/util/delay.h **** #endif
+ 186:/usr/lib/avr/include/util/delay.h **** }
+ 187:/usr/lib/avr/include/util/delay.h **** 
+ 188:/usr/lib/avr/include/util/delay.h **** /**
+ 189:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 190:/usr/lib/avr/include/util/delay.h **** 
+ 191:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __us microseconds, using _delay_loop_1().
+ 192:/usr/lib/avr/include/util/delay.h **** 
+ 193:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 194:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 195:/usr/lib/avr/include/util/delay.h **** 
+ 196:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 768 us / F_CPU in MHz.
+ 197:/usr/lib/avr/include/util/delay.h **** 
+ 198:/usr/lib/avr/include/util/delay.h ****    If the user requests a delay greater than the maximal possible one,
+ 199:/usr/lib/avr/include/util/delay.h ****    _delay_us() will automatically call _delay_ms() instead.  The user
+ 200:/usr/lib/avr/include/util/delay.h ****    will not be informed about this case.
+ 201:/usr/lib/avr/include/util/delay.h **** 
+ 202:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 203:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 us/ F_CPU in MHz. For
+ 204:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflow results in
+ 205:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0us.
+ 206:/usr/lib/avr/include/util/delay.h ****   
+ 207:/usr/lib/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 208:/usr/lib/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 209:/usr/lib/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 210:/usr/lib/avr/include/util/delay.h **** 
+ 211:/usr/lib/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 212:/usr/lib/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 213:/usr/lib/avr/include/util/delay.h ****  
+ 214:/usr/lib/avr/include/util/delay.h ****    Note: The new implementation of _delay_us(double __us) with 
+ 215:/usr/lib/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible.
+ 216:/usr/lib/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 217:/usr/lib/avr/include/util/delay.h ****    Also, the backward compatible
+ 218:/usr/lib/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 219:/usr/lib/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 220:/usr/lib/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 221:/usr/lib/avr/include/util/delay.h **** 
+ 222:/usr/lib/avr/include/util/delay.h ****  */
+ 223:/usr/lib/avr/include/util/delay.h **** void
+ 224:/usr/lib/avr/include/util/delay.h **** _delay_us(double __us)
+ 225:/usr/lib/avr/include/util/delay.h **** {
+ 226:/usr/lib/avr/include/util/delay.h **** 	double __tmp ; 
+ 227:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 228:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 229:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 230:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 231:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 232:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e6) * __us;
+ 233:/usr/lib/avr/include/util/delay.h **** 
+ 234:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 235:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 236:/usr/lib/avr/include/util/delay.h **** 
+ 237:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 238:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 239:/usr/lib/avr/include/util/delay.h **** 
+ 240:/usr/lib/avr/include/util/delay.h **** 	#else
+ 241:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 242:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 243:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 244:/usr/lib/avr/include/util/delay.h **** 
+ 245:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+  59               		.loc 2 245 0
+  60 0002 2AE1      		ldi r18,lo8(26)
+  61 0004 2A95      		1: dec r18
+  62 0006 01F4      		brne 1b
+  63 0008 00C0      		rjmp .
+  64               	.LBE8:
+  65               	.LBE7:
+  46:glcdbp.c      ****   //}
+  66               		.loc 1 46 0
+  67 000a 81E0      		ldi r24,lo8(1)
+  68 000c 8093 0000 		sts display,r24
+  52:glcdbp.c      ****   
+  69               		.loc 1 52 0
+  70 0010 2B98      		cbi 0x5,3
+  57:glcdbp.c      ****   
+  71               		.loc 1 57 0
+  72 0012 0E94 0000 		call ioInit
+  73               	.LVL2:
+  61:glcdbp.c      ****   
+  74               		.loc 1 61 0
+  75 0016 0E94 0000 		call timerInit
+  76               	.LVL3:
+  66:glcdbp.c      ****   
+  77               		.loc 1 66 0
+  78 001a 80E1      		ldi r24,lo8(16)
+  79 001c 90E0      		ldi r25,0
+  80 001e 0E94 0000 		call serialInit
+  81               	.LVL4:
+  69:glcdbp.c      ****   
+  82               		.loc 1 69 0
+  83               	/* #APP */
+  84               	 ;  69 "glcdbp.c" 1
+  85 0022 7894      		sei
+  86               	 ;  0 "" 2
+  73:glcdbp.c      ****   
+  87               		.loc 1 73 0
+  88               	/* #NOAPP */
+  89 0024 0E94 0000 		call getReverse
+  90               	.LVL5:
+  91 0028 8170      		andi r24,lo8(1)
+  92 002a 8093 0000 		sts reverse,r24
+  78:glcdbp.c      ****   
+  93               		.loc 1 78 0
+  94 002e 0E94 0000 		call lcdConfig
+  95               	.LVL6:
+  83:glcdbp.c      ****   
+  96               		.loc 1 83 0
+  97 0032 0E94 0000 		call lcdClearScreen
+  98               	.LVL7:
+  86:glcdbp.c      ****   
+  99               		.loc 1 86 0
+ 100 0036 0E94 0000 		call getSplash
+ 101               	.LVL8:
+ 102 003a 80FD      		sbrc r24,0
+  86:glcdbp.c      ****   
+ 103               		.loc 1 86 0 is_stmt 0 discriminator 1
+ 104 003c 0E94 0000 		call lcdDrawLogo
+ 105               	.LVL9:
+ 106               	.L3:
+ 107               	.LBB9:
+ 108               	.LBB10:
+ 163:/usr/lib/avr/include/util/delay.h **** 
+ 109               		.loc 2 163 0 is_stmt 1
+ 110 0040 8FEF      		ldi r24,lo8(3199999)
+ 111 0042 93ED      		ldi r25,hi8(3199999)
+ 112 0044 20E3      		ldi r18,hlo8(3199999)
+ 113 0046 8150      		1: subi r24,1
+ 114 0048 9040      		sbci r25,0
+ 115 004a 2040      		sbci r18,0
+ 116 004c 01F4      		brne 1b
+ 117 004e 00C0      		rjmp .
+ 118 0050 0000      		nop
+ 119               	.LBE10:
+ 120               	.LBE9:
+  94:glcdbp.c      ****   {
+ 121               		.loc 1 94 0
+ 122 0052 8091 0000 		lds r24,bufferSize
+ 123 0056 8111      		cpse r24,__zero_reg__
+ 124 0058 00C0      		rjmp .L4
+  96:glcdbp.c      ****     {
+ 125               		.loc 1 96 0
+ 126 005a 0E94 0000 		call getBaudRate
+ 127               	.LVL10:
+ 128 005e 8333      		cpi r24,lo8(51)
+ 129 0060 01F0      		breq .L6
+ 130 0062 00F4      		brsh .L7
+ 131 0064 8133      		cpi r24,lo8(49)
+ 132 0066 01F0      		breq .L8
+ 133 0068 8233      		cpi r24,lo8(50)
+ 134 006a 01F4      		brne .L5
+ 102:glcdbp.c      ****       break;
+ 135               		.loc 1 102 0
+ 136 006c 8FEC      		ldi r24,lo8(-49)
+ 137 006e 90E0      		ldi r25,0
+ 138 0070 00C0      		rjmp .L27
+ 139               	.L7:
+  96:glcdbp.c      ****     {
+ 140               		.loc 1 96 0
+ 141 0072 8533      		cpi r24,lo8(53)
+ 142 0074 01F0      		breq .L10
+ 143 0076 00F0      		brlo .L11
+ 144 0078 8633      		cpi r24,lo8(54)
+ 145 007a 01F4      		brne .L5
+ 114:glcdbp.c      ****       break;
+ 146               		.loc 1 114 0
+ 147 007c 80E1      		ldi r24,lo8(16)
+ 148 007e 90E0      		ldi r25,0
+ 149 0080 00C0      		rjmp .L27
+ 150               	.L8:
+  99:glcdbp.c      ****       break;
+ 151               		.loc 1 99 0
+ 152 0082 80EA      		ldi r24,lo8(-96)
+ 153 0084 91E0      		ldi r25,lo8(1)
+ 154 0086 00C0      		rjmp .L27
+ 155               	.L6:
+ 105:glcdbp.c      ****       break;
+ 156               		.loc 1 105 0
+ 157 0088 87E6      		ldi r24,lo8(103)
+ 158 008a 90E0      		ldi r25,0
+ 159 008c 00C0      		rjmp .L27
+ 160               	.L11:
+ 108:glcdbp.c      ****       break;
+ 161               		.loc 1 108 0
+ 162 008e 83E3      		ldi r24,lo8(51)
+ 163 0090 90E0      		ldi r25,0
+ 164 0092 00C0      		rjmp .L27
+ 165               	.L10:
+ 111:glcdbp.c      ****       break;
+ 166               		.loc 1 111 0
+ 167 0094 82E2      		ldi r24,lo8(34)
+ 168 0096 90E0      		ldi r25,0
+ 169               	.L27:
+ 170 0098 0E94 0000 		call serialInit
+ 171               	.LVL11:
+ 112:glcdbp.c      ****       case '6':
+ 172               		.loc 1 112 0
+ 173 009c 00C0      		rjmp .L5
+ 174               	.L4:
+ 120:glcdbp.c      ****   
+ 175               		.loc 1 120 0
+ 176 009e 86E3      		ldi r24,lo8(54)
+ 177 00a0 0E94 0000 		call setBaudRate
+ 178               	.LVL12:
+ 179               	.L5:
+ 123:glcdbp.c      ****   
+ 180               		.loc 1 123 0
+ 181 00a4 0E94 0000 		call lcdClearScreen
+ 182               	.LVL13:
+ 128:glcdbp.c      ****   
+ 183               		.loc 1 128 0
+ 184 00a8 0E94 0000 		call clearBuffer
+ 185               	.LVL14:
+ 186               	.L20:
+ 142:glcdbp.c      ****     {
+ 187               		.loc 1 142 0 discriminator 1
+ 188 00ac 8091 0000 		lds r24,bufferSize
+ 189 00b0 8823      		tst r24
+ 190 00b2 01F0      		breq .L20
+ 191               	.LBB11:
+ 147:glcdbp.c      ****       // If the character received is the command escape character ('|')...
+ 192               		.loc 1 147 0
+ 193 00b4 0E94 0000 		call serialBufferPop
+ 194               	.LVL15:
+ 149:glcdbp.c      ****       {
+ 195               		.loc 1 149 0
+ 196 00b8 8C37      		cpi r24,lo8(124)
+ 197 00ba 01F4      		brne .L14
+ 198               	.LVL16:
+ 199               	.L16:
+ 151:glcdbp.c      ****         bufferChar = serialBufferPop(); // ...fetch the character..
+ 200               		.loc 1 151 0
+ 201 00bc 8091 0000 		lds r24,bufferSize
+ 202 00c0 8823      		tst r24
+ 203 00c2 01F0      		breq .L16
+ 152:glcdbp.c      ****         uiStateMachine(bufferChar); // ... then see what to do.
+ 204               		.loc 1 152 0
+ 205 00c4 0E94 0000 		call serialBufferPop
+ 206               	.LVL17:
+ 153:glcdbp.c      ****         // Note that we won't return from the state machine until the command
+ 207               		.loc 1 153 0
+ 208 00c8 0E94 0000 		call uiStateMachine
+ 209               	.LVL18:
+ 210 00cc 00C0      		rjmp .L20
+ 211               	.LVL19:
+ 212               	.L14:
+ 160:glcdbp.c      ****                (bufferChar == '\r') ||  // Newline.
+ 213               		.loc 1 160 0
+ 214 00ce 90EE      		ldi r25,lo8(-32)
+ 215 00d0 980F      		add r25,r24
+ 216 00d2 9F35      		cpi r25,lo8(95)
+ 217 00d4 00F0      		brlo .L18
+ 160:glcdbp.c      ****                (bufferChar == '\r') ||  // Newline.
+ 218               		.loc 1 160 0 is_stmt 0 discriminator 1
+ 219 00d6 8D30      		cpi r24,lo8(13)
+ 220 00d8 01F0      		breq .L18
+ 161:glcdbp.c      ****                (bufferChar == '\b') )   // Backspace.
+ 221               		.loc 1 161 0 is_stmt 1
+ 222 00da 8830      		cpi r24,lo8(8)
+ 223 00dc 01F4      		brne .L20
+ 224               	.L18:
+ 163:glcdbp.c      ****     }
+ 225               		.loc 1 163 0
+ 226 00de 0E94 0000 		call lcdDrawChar
+ 227               	.LVL20:
+ 228 00e2 00C0      		rjmp .L20
+ 229               	.LBE11:
+ 230               		.cfi_endproc
+ 231               	.LFE7:
+ 233               	.global	reverse
+ 234               		.section .bss
+ 237               	reverse:
+ 238 0000 00        		.zero	1
+ 239               	.global	rxRingTail
+ 242               	rxRingTail:
+ 243 0001 0000      		.zero	2
+ 244               	.global	rxRingHead
+ 247               	rxRingHead:
+ 248 0003 0000      		.zero	2
+ 249               	.global	bufferSize
+ 252               	bufferSize:
+ 253 0005 00        		.zero	1
+ 254               		.comm	rxRingBuffer,256,1
+ 255               	.global	display
+ 258               	display:
+ 259 0006 00        		.zero	1
+ 260               		.text
+ 261               	.Letext0:
+ 262               		.file 3 "/usr/lib/avr/include/stdint.h"
+ 263               		.file 4 "lcd.h"
+ 264               		.file 5 "nvm.h"
+ 265               		.file 6 "serial.h"
+ 266               		.file 7 "ui.h"
+ 267               		.file 8 "io_support.h"
+ 268               		.file 9 "glcdbp.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 glcdbp.c
+     /tmp/ccFMobPz.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccFMobPz.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccFMobPz.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccFMobPz.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccFMobPz.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccFMobPz.s:12     .text:0000000000000000 timerInit
+     /tmp/ccFMobPz.s:45     .text.startup:0000000000000000 main
+     /tmp/ccFMobPz.s:258    .bss:0000000000000006 display
+     /tmp/ccFMobPz.s:237    .bss:0000000000000000 reverse
+     /tmp/ccFMobPz.s:252    .bss:0000000000000005 bufferSize
+     /tmp/ccFMobPz.s:242    .bss:0000000000000001 rxRingTail
+     /tmp/ccFMobPz.s:247    .bss:0000000000000003 rxRingHead
+                            *COM*:0000000000000100 rxRingBuffer
+
+UNDEFINED SYMBOLS
+getBacklightLevel
+ioInit
+serialInit
+getReverse
+lcdConfig
+lcdClearScreen
+getSplash
+lcdDrawLogo
+getBaudRate
+setBaudRate
+clearBuffer
+serialBufferPop
+uiStateMachine
+lcdDrawChar
+__do_clear_bss
