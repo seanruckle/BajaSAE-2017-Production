@@ -1,19 +1,30 @@
 #!/bin/bash
 
+echo -e "Updating Package Lists:\n"
 apt-get update
+
+echo -e "Removing Extraneous Packages:\n"
 apt-get purge scratch brasero libreoffice* sense-emu-tools shotwell thunderbird -y
 apt-get autoremove -y
+
+echo -e "Installing Updates:\n"
 apt-get upgrade -y
 apt-get install -y mumble mumble-server arduino arduino-core witty witty-examples nmap git-all
+
+echo -e "\n\nCloning Git Repository\n"
 mkdir /home/$1/code
 git clone https://github.com/seanruckle/BajaSAE-2017-Production.git /home/$1/code
 chown -R $1 /home/$1/code
 
+echo -e "reconfiguring network settings:\n"
 ifdown wlan0
 
+echo -e "Checking if Processing is already installed:\n"
 if(! test -d "/usr/local/lib/processing"); then
 # This script installs the latest version of Processing for ARM into /usr/local/lib
 # Run it like this: "curl https://processing.org/download/install-arm.sh | sudo sh"
+
+echo -e "Installing Processing:\n"
 
 # this assumes that newer releases are at the top
 TAR="$(curl -sL https://api.github.com/repos/processing/processing/releases | grep -oh -m 1 'https.*linux-armv6hf.tgz')"
